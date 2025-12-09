@@ -2,11 +2,13 @@
 
 from dataclasses import dataclass
 
+from InquirerPy import inquirer
+from InquirerPy.base.control import Choice
 from rich.prompt import Prompt
 from rich.table import Table
 
 from .analyzer import get_track_by_identity
-from .models import AnalysisResult, Episode, ExternalSource, Track, TrackType
+from .models import AnalysisResult, ExternalSource, Track, TrackType
 from .utils import console
 
 
@@ -109,21 +111,16 @@ def display_analysis(analysis: AnalysisResult) -> None:
     return audio_options, sub_options
 
 
-def _parse_selection(response: str, max_idx: int) -> list[int] | None:
-    """Parse a comma-separated selection string into indices."""
-    if response.strip() == "0":
-        return list(range(1, max_idx + 1))  # All
-    if response.strip() == "-1":
-        return []  # None
-
-    try:
-        indices = [int(x.strip()) for x in response.split(",")]
-        if all(1 <= i <= max_idx for i in indices):
-            return indices
-    except ValueError:
-        pass
-
-    return None
+def _build_checkbox_choices(
+    options: list[tuple[str, bool, str]],
+) -> list[Choice]:
+    """Build InquirerPy Choice objects from options."""
+    choices = []
+    for i, (identifier, is_embedded, display_name) in enumerate(options):
+        source_tag = "[embedded]" if is_embedded else "[external]"
+        name = f"{source_tag} {display_name}"
+        choices.append(Choice(value=i, name=name, enabled=False))
+    return choices
 
 
 def select_tracks(
@@ -132,7 +129,7 @@ def select_tracks(
     sub_options: list[tuple[str, bool, str]],
 ) -> SelectionResult:
     """
-    Interactively select audio and subtitle tracks.
+    Interactively select audio and subtitle tracks using checkbox UI.
 
     Args:
         analysis: The analysis result
@@ -146,57 +143,67 @@ def select_tracks(
     console.print("[bold]TRACK SELECTION[/bold]", justify="center")
     console.print("=" * 70)
 
-    # Audio selection
-    console.print("\n[bold]Select audio track(s) to include:[/bold]")
-    console.print("  Enter number(s) separated by comma, or 0 for all")
-    console.print("  First selection will be marked as default\n")
+    # Audio selection with checkbox
+    audio_choices = _build_checkbox_choices(audio_options)
 
-    while True:
-        response = Prompt.ask("Audio selection", default="1")
-        indices = _parse_selection(response, len(audio_options))
-        if indices is not None and len(indices) > 0:
-            break
-        console.print("[red]Invalid selection. Please enter valid number(s).[/red]")
+    console.print()  # Blank line before prompt
+    selected_audio_indices = inquirer.checkbox(
+        message="Select audio track(s) to include:",
+        choices=audio_choices,
+        instruction="(↑/↓ navigate, Space select, Enter confirm)",
+        validate=lambda result: len(result) >= 1,
+        invalid_message="At least one audio track must be selected",
+        transformer=lambda result: f"{len(result)} track(s) selected",
+        cycle=True,
+    ).execute()
 
     audio_selections = [
         TrackSelection(
-            identifier=audio_options[i - 1][0],
-            is_embedded=audio_options[i - 1][1],
-            display_name=audio_options[i - 1][2],
+            identifier=audio_options[i][0],
+            is_embedded=audio_options[i][1],
+            display_name=audio_options[i][2],
         )
-        for i in indices
+        for i in selected_audio_indices
     ]
 
+    # Show confirmation of audio selection
+    console.print("[green]Audio selected:[/green]")
     for sel in audio_selections:
         source_type = "[embedded]" if sel.is_embedded else "[external]"
-        console.print(f"  [green]>[/green] {source_type} {sel.display_name}")
+        console.print(f"  • {source_type} {sel.display_name}")
 
-    # Subtitle selection
-    console.print("\n[bold]Select subtitle track(s) to include:[/bold]")
-    console.print("  Enter number(s), 0 for all, or -1 for none\n")
+    # Subtitle selection with checkbox
+    if sub_options:
+        sub_choices = _build_checkbox_choices(sub_options)
 
-    while True:
-        response = Prompt.ask("Subtitle selection", default="1" if sub_options else "-1")
-        indices = _parse_selection(response, len(sub_options))
-        if indices is not None:
-            break
-        console.print("[red]Invalid selection. Please enter valid number(s).[/red]")
+        console.print()  # Blank line before prompt
+        selected_sub_indices = inquirer.checkbox(
+            message="Select subtitle track(s) to include:",
+            choices=sub_choices,
+            instruction="(↑/↓ navigate, Space select, Enter confirm)",
+            transformer=lambda result: f"{len(result)} track(s) selected" if result else "None",
+            cycle=True,
+        ).execute()
 
-    subtitle_selections = [
-        TrackSelection(
-            identifier=sub_options[i - 1][0],
-            is_embedded=sub_options[i - 1][1],
-            display_name=sub_options[i - 1][2],
-        )
-        for i in indices
-    ]
+        subtitle_selections = [
+            TrackSelection(
+                identifier=sub_options[i][0],
+                is_embedded=sub_options[i][1],
+                display_name=sub_options[i][2],
+            )
+            for i in selected_sub_indices
+        ]
+    else:
+        subtitle_selections = []
 
+    # Show confirmation of subtitle selection
     if subtitle_selections:
+        console.print("[green]Subtitles selected:[/green]")
         for sel in subtitle_selections:
             source_type = "[embedded]" if sel.is_embedded else "[external]"
-            console.print(f"  [green]>[/green] {source_type} {sel.display_name}")
+            console.print(f"  • {source_type} {sel.display_name}")
     else:
-        console.print("  [dim]No subtitles selected[/dim]")
+        console.print("[dim]No subtitles selected[/dim]")
 
     # Handle gaps for external sources
     audio_subs, audio_skipped = _handle_gaps(

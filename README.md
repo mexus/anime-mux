@@ -9,7 +9,7 @@ A command-line tool for consolidating anime releases into clean, player-friendly
 - **Hybrid mode**: Add external tracks to files that already have embedded tracks
 - **Smart episode detection**: Automatically matches files by episode number
 - **No transcoding**: Uses FFmpeg stream-copy for fast, lossless processing
-- **Interactive selection**: Clear menus for choosing which tracks to include
+- **Interactive selection**: Checkbox UI with arrow keys and spacebar for track selection
 - **Preserves attachments**: Keeps fonts and other MKV attachments intact
 
 ## Installation
@@ -111,6 +111,13 @@ anime-mux /media/Anime/SeriesName/ -a /path/to/russian/audio/
 
 The tool will show both embedded and external tracks, letting you select multiple audio tracks to include.
 
+#### Handling Existing Files
+
+If output files already exist, you'll be prompted to choose:
+- **Overwrite** (`o`) - Re-process and overwrite existing files
+- **Skip** (`s`) - Process only new files, skip existing ones
+- **Abort** (`a`) - Cancel the operation
+
 ### Interactive Session Example
 
 ```
@@ -146,19 +153,19 @@ Searching for external subtitle sources...
                          TRACK SELECTION
 ======================================================================
 
-Select audio track(s) to include:
-  Enter number(s) separated by comma, or 0 for all
-  First selection will be marked as default
+? Select audio track(s) to include: (↑/↓ navigate, Space select, Enter confirm)
+  ❯ ◉ [external] Anilibria
+    ◉ [embedded] jpn - Japanese (2ch)
 
-Audio selection: 2,1
-  > [external] Anilibria
-  > [embedded] jpn - Japanese (2ch)
+Audio selected:
+  • [external] Anilibria
+  • [embedded] jpn - Japanese (2ch)
 
-Select subtitle track(s) to include:
-  Enter number(s), 0 for all, or -1 for none
+? Select subtitle track(s) to include: (↑/↓ navigate, Space select, Enter confirm)
+  ❯ ◉ [embedded] eng - English Subtitles
 
-Subtitle selection: 1
-  > [embedded] eng - English Subtitles
+Subtitles selected:
+  • [embedded] eng - English Subtitles
 
 Proceed with merge? [Y/n]: y
 
@@ -368,6 +375,7 @@ uv run pytest
 
 - **typer** - CLI framework
 - **rich** - Terminal formatting, tables, progress bars
+- **InquirerPy** - Interactive checkbox selection
 - **pytest** (dev) - Testing
 
 ## License
