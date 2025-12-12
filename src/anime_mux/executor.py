@@ -11,14 +11,14 @@ from .models import MergeJob, MergePlan, Track
 from .utils import console
 
 
-def build_ffmpeg_command(job: MergeJob, copy_audio: bool = False) -> list[str]:
+def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[str]:
     """
     Build FFmpeg command for a merge job.
 
     Key considerations:
     - Use -map to select specific streams
     - Video/subtitles: stream copy (no transcoding)
-    - Audio: re-encode to AAC 256k (or copy if copy_audio=True)
+    - Audio: copy as-is (or re-encode to AAC 256k if transcode_audio=True)
     - Use -disposition to set default tracks
     - Preserve attachments (fonts) from source
     """
@@ -69,10 +69,10 @@ def build_ffmpeg_command(job: MergeJob, copy_audio: bool = False) -> list[str]:
     # Video, subtitles, attachments: copy (no transcoding)
     # Audio: copy or re-encode to AAC
     cmd.extend(["-c:v", "copy"])
-    if copy_audio:
-        cmd.extend(["-c:a", "copy"])
-    else:
+    if transcode_audio:
         cmd.extend(["-c:a", "aac", "-b:a", "256k"])
+    else:
+        cmd.extend(["-c:a", "copy"])
     cmd.extend(["-c:s", "copy"])
 
     # Set dispositions (first audio and first subtitle are default)
@@ -120,7 +120,7 @@ def run_ffmpeg(cmd: list[str]) -> tuple[bool, str | None]:
         return False, "ffmpeg not found in PATH"
 
 
-def _process_job(job: MergeJob, overwrite: bool, copy_audio: bool, verbose: bool = False) -> tuple[int, bool, str | None]:
+def _process_job(job: MergeJob, overwrite: bool, transcode_audio: bool, verbose: bool = False) -> tuple[int, bool, str | None]:
     """
     Process a single merge job.
 
@@ -132,7 +132,7 @@ def _process_job(job: MergeJob, overwrite: bool, copy_audio: bool, verbose: bool
         return job.episode.number, None, None  # None success = skipped
 
     # Build and execute command
-    cmd = build_ffmpeg_command(job, copy_audio=copy_audio)
+    cmd = build_ffmpeg_command(job, transcode_audio=transcode_audio)
     if verbose:
         import shlex
         console.print(f"\n[dim]Episode {job.episode.number}:[/dim]")
@@ -141,14 +141,14 @@ def _process_job(job: MergeJob, overwrite: bool, copy_audio: bool, verbose: bool
     return job.episode.number, success, error
 
 
-def execute_plan(plan: MergePlan, overwrite: bool = False, copy_audio: bool = False, verbose: bool = False) -> tuple[int, int, int]:
+def execute_plan(plan: MergePlan, overwrite: bool = False, transcode_audio: bool = False, verbose: bool = False) -> tuple[int, int, int]:
     """
     Execute all jobs in a merge plan using parallel processing.
 
     Args:
         plan: The merge plan to execute
         overwrite: If True, overwrite existing output files. If False, skip them.
-        copy_audio: If True, copy audio without re-encoding. If False, re-encode to AAC.
+        transcode_audio: If True, re-encode audio to AAC. If False, copy audio as-is.
         verbose: If True, print ffmpeg commands before executing.
 
     Returns:
@@ -180,7 +180,7 @@ def execute_plan(plan: MergePlan, overwrite: bool = False, copy_audio: bool = Fa
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
             # Submit all jobs
             futures = {
-                executor.submit(_process_job, job, overwrite, copy_audio, verbose): job
+                executor.submit(_process_job, job, overwrite, transcode_audio, verbose): job
                 for job in plan.jobs
             }
 

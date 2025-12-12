@@ -56,11 +56,11 @@ def main(
         "-s",
         help="Directory to search for external subtitle files",
     ),
-    copy_audio: bool = typer.Option(
+    transcode_audio: bool = typer.Option(
         False,
-        "--copy-audio",
-        "-c",
-        help="Copy audio without re-encoding (default: re-encode to AAC)",
+        "--transcode-audio",
+        "-t",
+        help="Re-encode audio to AAC 256k (default: copy audio as-is)",
     ),
     verbose: bool = typer.Option(
         False,
@@ -84,7 +84,7 @@ def main(
     and/or merging external audio/subtitle files into clean MKV containers.
     """
     try:
-        _run(directory, output, audio_dir, subs_dir, copy_audio, verbose)
+        _run(directory, output, audio_dir, subs_dir, transcode_audio, verbose)
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user.[/yellow]")
         sys.exit(1)
@@ -98,7 +98,7 @@ def _run(
     output: Optional[Path],
     audio_dir: Optional[Path],
     subs_dir: Optional[Path],
-    copy_audio: bool,
+    transcode_audio: bool,
     verbose: bool,
 ):
     """Main workflow."""
@@ -178,7 +178,7 @@ def _run(
             sys.exit(0)
 
     # Phase 5: Execute
-    successful, failed, skipped = execute_plan(plan, overwrite=overwrite, copy_audio=copy_audio, verbose=verbose)
+    successful, failed, skipped = execute_plan(plan, overwrite=overwrite, transcode_audio=transcode_audio, verbose=verbose)
 
     # Summary
     console.print("\n" + "=" * 50)
