@@ -10,7 +10,7 @@ from .discovery import (
     find_video_files,
 )
 from .matcher import extract_episode_numbers
-from .models import AnalysisResult, Episode, ExternalSource, Track, TrackType
+from .models import AnalysisResult, Episode, Track, TrackType
 from .probe import parse_tracks, probe_external_file, probe_file, ProbeError
 from .utils import console
 
@@ -23,17 +23,13 @@ def _find_common_tracks(episodes: list[Episode], track_type: TrackType) -> list[
     # Get tracks of the specified type from first episode
     first_ep = episodes[0]
     common_keys = {
-        t.identity_key
-        for t in first_ep.embedded_tracks
-        if t.track_type == track_type
+        t.identity_key for t in first_ep.embedded_tracks if t.track_type == track_type
     }
 
     # Intersect with each subsequent episode
     for ep in episodes[1:]:
         ep_keys = {
-            t.identity_key
-            for t in ep.embedded_tracks
-            if t.track_type == track_type
+            t.identity_key for t in ep.embedded_tracks if t.track_type == track_type
         }
         common_keys &= ep_keys
 
@@ -99,9 +95,7 @@ def analyze_series(
     # Step 2: Extract episode numbers
     video_map = extract_episode_numbers(video_files)
     if not video_map:
-        console.print(
-            "[red]Could not detect episode pattern from filenames.[/red]"
-        )
+        console.print("[red]Could not detect episode pattern from filenames.[/red]")
         return None
 
     console.print(f"Detected episodes: {sorted(video_map.keys())}")

@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from anime_mux.models import TrackSource, TrackType
 from anime_mux.probe import _get_tag, parse_tracks
 
@@ -111,10 +109,36 @@ class TestParseTracks:
     def test_parse_multiple_tracks(self):
         probe_data = {
             "streams": [
-                {"index": 0, "codec_type": "video", "codec_name": "h264", "tags": {}, "disposition": {}},
-                {"index": 1, "codec_type": "audio", "codec_name": "aac", "channels": 2, "tags": {"language": "jpn"}, "disposition": {}},
-                {"index": 2, "codec_type": "audio", "codec_name": "ac3", "channels": 6, "tags": {"language": "eng"}, "disposition": {}},
-                {"index": 3, "codec_type": "subtitle", "codec_name": "srt", "tags": {"language": "eng"}, "disposition": {}},
+                {
+                    "index": 0,
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "tags": {},
+                    "disposition": {},
+                },
+                {
+                    "index": 1,
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "channels": 2,
+                    "tags": {"language": "jpn"},
+                    "disposition": {},
+                },
+                {
+                    "index": 2,
+                    "codec_type": "audio",
+                    "codec_name": "ac3",
+                    "channels": 6,
+                    "tags": {"language": "eng"},
+                    "disposition": {},
+                },
+                {
+                    "index": 3,
+                    "codec_type": "subtitle",
+                    "codec_name": "srt",
+                    "tags": {"language": "eng"},
+                    "disposition": {},
+                },
             ]
         }
         tracks = parse_tracks(probe_data, Path("/test/video.mkv"))
@@ -131,7 +155,13 @@ class TestParseTracks:
     def test_unknown_language_defaults_to_und(self):
         probe_data = {
             "streams": [
-                {"index": 0, "codec_type": "audio", "codec_name": "aac", "tags": {}, "disposition": {}}
+                {
+                    "index": 0,
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "tags": {},
+                    "disposition": {},
+                }
             ]
         }
         tracks = parse_tracks(probe_data, Path("/test/video.mkv"))
@@ -141,8 +171,20 @@ class TestParseTracks:
     def test_ignores_data_streams(self):
         probe_data = {
             "streams": [
-                {"index": 0, "codec_type": "video", "codec_name": "h264", "tags": {}, "disposition": {}},
-                {"index": 1, "codec_type": "data", "codec_name": "bin_data", "tags": {}, "disposition": {}},
+                {
+                    "index": 0,
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "tags": {},
+                    "disposition": {},
+                },
+                {
+                    "index": 1,
+                    "codec_type": "data",
+                    "codec_name": "bin_data",
+                    "tags": {},
+                    "disposition": {},
+                },
             ]
         }
         tracks = parse_tracks(probe_data, Path("/test/video.mkv"))

@@ -5,9 +5,9 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskID
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 
-from .models import MergeJob, MergePlan, Track
+from .models import MergeJob, MergePlan
 from .utils import console
 
 
@@ -60,7 +60,9 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
     # Map attachments from primary video file (fonts, etc.)
     if job.preserve_attachments:
         primary_input = input_map[job.episode.video_file]
-        cmd.extend(["-map", f"{primary_input}:t?"])  # :t for attachments, ? for optional
+        cmd.extend(
+            ["-map", f"{primary_input}:t?"]
+        )  # :t for attachments, ? for optional
         # Fix audio/video interleaving when attachments are mapped from a different
         # input than audio. Without this, ffmpeg may write all audio packets first,
         # causing players to appear to have no audio during video playback.
@@ -120,7 +122,9 @@ def run_ffmpeg(cmd: list[str]) -> tuple[bool, str | None]:
         return False, "ffmpeg not found in PATH"
 
 
-def _process_job(job: MergeJob, overwrite: bool, transcode_audio: bool, verbose: bool = False) -> tuple[int, bool, str | None]:
+def _process_job(
+    job: MergeJob, overwrite: bool, transcode_audio: bool, verbose: bool = False
+) -> tuple[int, bool, str | None]:
     """
     Process a single merge job.
 
@@ -129,19 +133,25 @@ def _process_job(job: MergeJob, overwrite: bool, transcode_audio: bool, verbose:
     """
     # Check if output already exists
     if job.output_path.exists() and not overwrite:
-        return job.episode.number, None, None  # None success = skipped
+        return job.episode.number, True, None  # None success = skipped
 
     # Build and execute command
     cmd = build_ffmpeg_command(job, transcode_audio=transcode_audio)
     if verbose:
         import shlex
+
         console.print(f"\n[dim]Episode {job.episode.number}:[/dim]")
         console.print(f"[yellow]{shlex.join(cmd)}[/yellow]\n")
     success, error = run_ffmpeg(cmd)
     return job.episode.number, success, error
 
 
-def execute_plan(plan: MergePlan, overwrite: bool = False, transcode_audio: bool = False, verbose: bool = False) -> tuple[int, int, int]:
+def execute_plan(
+    plan: MergePlan,
+    overwrite: bool = False,
+    transcode_audio: bool = False,
+    verbose: bool = False,
+) -> tuple[int, int, int]:
     """
     Execute all jobs in a merge plan using parallel processing.
 
@@ -161,7 +171,9 @@ def execute_plan(plan: MergePlan, overwrite: bool = False, transcode_audio: bool
     # Use 1 worker if verbose to keep output readable
     num_workers = 1 if verbose else max(1, (os.cpu_count() or 2) // 2)
 
-    console.print(f"\n[blue]Processing {len(plan.jobs)} files using {num_workers} workers...[/blue]")
+    console.print(
+        f"\n[blue]Processing {len(plan.jobs)} files using {num_workers} workers...[/blue]"
+    )
 
     successful = 0
     failed = 0
@@ -180,7 +192,9 @@ def execute_plan(plan: MergePlan, overwrite: bool = False, transcode_audio: bool
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
             # Submit all jobs
             futures = {
-                executor.submit(_process_job, job, overwrite, transcode_audio, verbose): job
+                executor.submit(
+                    _process_job, job, overwrite, transcode_audio, verbose
+                ): job
                 for job in plan.jobs
             }
 

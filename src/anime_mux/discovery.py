@@ -29,7 +29,7 @@ def _find_files_with_extensions(
     directory: Path, extensions: set[str], recursive: bool = True
 ) -> list[Path]:
     """Find files with given extensions in a directory."""
-    files = []
+    files: list[Path] = []
     if recursive:
         for ext in extensions:
             files.extend(directory.rglob(f"*{ext}"))
@@ -114,7 +114,9 @@ def discover_audio_sources(
 
     for path in search_paths:
         # First, check if audio files exist directly in this directory
-        direct_audio_files = _find_files_with_extensions(path, AUDIO_EXTENSIONS, recursive=True)
+        direct_audio_files = _find_files_with_extensions(
+            path, AUDIO_EXTENSIONS, recursive=True
+        )
         files_in_subdirs = any(f.parent != path for f in direct_audio_files)
 
         if direct_audio_files and not files_in_subdirs:

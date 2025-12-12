@@ -2,13 +2,14 @@
 
 from pathlib import Path
 
-import pytest
 
 from anime_mux.analyzer import _find_common_tracks, get_track_by_identity
 from anime_mux.models import Episode, Track, TrackSource, TrackType
 
 
-def make_audio_track(language: str, title: str | None = None, channels: int = 2) -> Track:
+def make_audio_track(
+    language: str, title: str | None = None, channels: int = 2
+) -> Track:
     """Helper to create audio tracks for testing."""
     return Track(
         index=0,
@@ -22,7 +23,9 @@ def make_audio_track(language: str, title: str | None = None, channels: int = 2)
     )
 
 
-def make_sub_track(language: str, title: str | None = None, is_forced: bool = False) -> Track:
+def make_sub_track(
+    language: str, title: str | None = None, is_forced: bool = False
+) -> Track:
     """Helper to create subtitle tracks for testing."""
     return Track(
         index=0,

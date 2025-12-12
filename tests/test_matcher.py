@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from anime_mux.matcher import extract_episode_numbers
 
 

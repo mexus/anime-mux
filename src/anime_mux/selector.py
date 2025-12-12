@@ -7,7 +7,7 @@ from InquirerPy.base.control import Choice
 from rich.table import Table
 
 from .analyzer import get_track_by_identity
-from .models import AnalysisResult, ExternalSource, Track, TrackType
+from .models import AnalysisResult
 from .utils import console
 
 
@@ -40,7 +40,7 @@ class SelectionResult:
     skipped_episodes: list[int]
 
 
-def display_analysis(analysis: AnalysisResult) -> None:
+def display_analysis(analysis: AnalysisResult):
     """Display the analysis results in a formatted table."""
     console.print("\n" + "=" * 70)
     console.print("[bold]TRACK ANALYSIS[/bold]", justify="center")
@@ -180,7 +180,9 @@ def select_tracks(
             message="Select subtitle track(s) to include:",
             choices=sub_choices,
             instruction="(↑/↓ navigate, Space select, Enter confirm)",
-            transformer=lambda result: f"{len(result)} track(s) selected" if result else "None",
+            transformer=lambda result: f"{len(result)} track(s) selected"
+            if result
+            else "None",
             cycle=True,
         ).execute()
 
@@ -205,12 +207,8 @@ def select_tracks(
         console.print("[dim]No subtitles selected[/dim]")
 
     # Handle gaps for external sources
-    audio_subs, audio_skipped = _handle_gaps(
-        analysis, audio_selections, "audio"
-    )
-    sub_subs, sub_skipped = _handle_gaps(
-        analysis, subtitle_selections, "subtitle"
-    )
+    audio_subs, audio_skipped = _handle_gaps(analysis, audio_selections, "audio")
+    sub_subs, sub_skipped = _handle_gaps(analysis, subtitle_selections, "subtitle")
 
     skipped = list(set(audio_skipped) | set(sub_skipped))
 

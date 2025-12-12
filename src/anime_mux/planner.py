@@ -145,15 +145,25 @@ def display_merge_plan(plan: MergePlan) -> None:
     table.add_column("Subs", style="yellow")
 
     for job in plan.jobs:
-        audio_desc = ", ".join(
-            t.display_name[:20] + "..." if len(t.display_name) > 23 else t.display_name
-            for t in job.audio_tracks
-        ) or "-"
+        audio_desc = (
+            ", ".join(
+                t.display_name[:20] + "..."
+                if len(t.display_name) > 23
+                else t.display_name
+                for t in job.audio_tracks
+            )
+            or "-"
+        )
 
-        sub_desc = ", ".join(
-            t.display_name[:20] + "..." if len(t.display_name) > 23 else t.display_name
-            for t in job.subtitle_tracks
-        ) or "-"
+        sub_desc = (
+            ", ".join(
+                t.display_name[:20] + "..."
+                if len(t.display_name) > 23
+                else t.display_name
+                for t in job.subtitle_tracks
+            )
+            or "-"
+        )
 
         table.add_row(
             str(job.episode.number),

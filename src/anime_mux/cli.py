@@ -178,7 +178,9 @@ def _run(
             sys.exit(0)
 
     # Phase 5: Execute
-    successful, failed, skipped = execute_plan(plan, overwrite=overwrite, transcode_audio=transcode_audio, verbose=verbose)
+    successful, failed, skipped = execute_plan(
+        plan, overwrite=overwrite, transcode_audio=transcode_audio, verbose=verbose
+    )
 
     # Summary
     console.print("\n" + "=" * 50)

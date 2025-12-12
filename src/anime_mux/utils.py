@@ -11,7 +11,15 @@ AUDIO_EXTENSIONS = {".mka", ".aac", ".ac3", ".flac", ".mp3", ".opus", ".m4a", ".
 SUBTITLE_EXTENSIONS = {".srt", ".ass", ".ssa", ".vtt", ".sub", ".idx"}
 
 # Keywords for directory discovery
-AUDIO_DIR_KEYWORDS = {"sound", "audio", "voiceover", "voice", "dub", "sounds", "voiceovers"}
+AUDIO_DIR_KEYWORDS = {
+    "sound",
+    "audio",
+    "voiceover",
+    "voice",
+    "dub",
+    "sounds",
+    "voiceovers",
+}
 SUBTITLE_DIR_KEYWORDS = {"subtitle", "sub", "subs", "caption", "subtitles"}
 
 # Exact directory names to search for

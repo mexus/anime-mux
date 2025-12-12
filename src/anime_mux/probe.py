@@ -140,7 +140,9 @@ def probe_external_file(file_path: Path, track_type: TrackType) -> Track | None:
                 title=_get_tag(tags, "title", "name"),
                 source=TrackSource.EXTERNAL,
                 source_file=file_path,
-                channels=stream.get("channels") if track_type == TrackType.AUDIO else None,
+                channels=stream.get("channels")
+                if track_type == TrackType.AUDIO
+                else None,
                 is_forced=disposition.get("forced", 0) == 1,
                 is_default=disposition.get("default", 0) == 1,
             )
