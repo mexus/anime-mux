@@ -167,9 +167,7 @@ class TestResolveAudioTracks:
         video_file = Path("/media/ep01.mkv")
         audio_track = make_audio_track(video_file, language="jpn", title="Japanese")
         ep = make_episode(1, video_file, audio_tracks=[audio_track])
-        analysis = make_analysis(
-            {1: ep}, common_audio=[audio_track.identity_key]
-        )
+        analysis = make_analysis({1: ep}, common_audio=[audio_track.identity_key])
         selection = make_selection(
             audio_selections=[
                 TrackSelection(
@@ -191,9 +189,7 @@ class TestResolveAudioTracks:
         external_track = make_audio_track(
             audio_file, language="rus", source=TrackSource.EXTERNAL
         )
-        ep = make_episode(
-            1, video_file, external_audio={"RuDub": external_track}
-        )
+        ep = make_episode(1, video_file, external_audio={"RuDub": external_track})
         analysis = make_analysis({1: ep})
         selection = make_selection(
             audio_selections=[
@@ -215,13 +211,16 @@ class TestResolveAudioTracks:
         video_file = Path("/media/ep01.mkv")
         audio_file = Path("/audio/ep01.mka")
 
-        jpn_track = make_audio_track(video_file, index=1, language="jpn", title="Japanese")
+        jpn_track = make_audio_track(
+            video_file, index=1, language="jpn", title="Japanese"
+        )
         external_track = make_audio_track(
             audio_file, language="rus", source=TrackSource.EXTERNAL
         )
 
         ep = make_episode(
-            1, video_file,
+            1,
+            video_file,
             audio_tracks=[jpn_track],
             external_audio={"RuDub": external_track},
         )
@@ -256,7 +255,8 @@ class TestResolveAudioTracks:
             audio_file, language="rus", source=TrackSource.EXTERNAL
         )
         ep = make_episode(
-            1, video_file,
+            1,
+            video_file,
             external_audio={"AltDub": alt_track},  # Main source missing, alt available
         )
         analysis = make_analysis({1: ep})
@@ -324,9 +324,7 @@ class TestResolveSubtitleTracks:
         external_sub = make_sub_track(
             sub_file, language="rus", source=TrackSource.EXTERNAL
         )
-        ep = make_episode(
-            1, video_file, external_subs={"RuSubs": external_sub}
-        )
+        ep = make_episode(1, video_file, external_subs={"RuSubs": external_sub})
         analysis = make_analysis({1: ep})
         selection = make_selection(
             subtitle_selections=[
@@ -349,11 +347,10 @@ class TestResolveSubtitleTracks:
         video_file = Path("/media/ep01.mkv")
         sub_file = Path("/subs/alt/ep01.ass")
 
-        alt_sub = make_sub_track(
-            sub_file, language="eng", source=TrackSource.EXTERNAL
-        )
+        alt_sub = make_sub_track(sub_file, language="eng", source=TrackSource.EXTERNAL)
         ep = make_episode(
-            1, video_file,
+            1,
+            video_file,
             external_subs={"AltSubs": alt_sub},
         )
         analysis = make_analysis({1: ep})
@@ -382,7 +379,9 @@ class TestBuildMergePlan:
         audio_track = make_audio_track(video_file, language="jpn", title="Japanese")
         sub_track = make_sub_track(video_file, language="eng", title="English")
 
-        ep = make_episode(1, video_file, audio_tracks=[audio_track], sub_tracks=[sub_track])
+        ep = make_episode(
+            1, video_file, audio_tracks=[audio_track], sub_tracks=[sub_track]
+        )
         analysis = make_analysis(
             {1: ep},
             common_audio=[audio_track.identity_key],
@@ -515,9 +514,7 @@ class TestBuildMergePlan:
         external_track = make_audio_track(
             audio_file, language="rus", source=TrackSource.EXTERNAL
         )
-        ep = make_episode(
-            1, video_file, external_audio={"RuDub": external_track}
-        )
+        ep = make_episode(1, video_file, external_audio={"RuDub": external_track})
         analysis = make_analysis({1: ep})
         selection = make_selection(
             audio_selections=[
@@ -538,7 +535,9 @@ class TestBuildMergePlan:
         video_file = Path("/media/ep01.mkv")
         audio_track = make_audio_track(video_file)
         sub_track = make_sub_track(video_file)
-        ep = make_episode(1, video_file, audio_tracks=[audio_track], sub_tracks=[sub_track])
+        ep = make_episode(
+            1, video_file, audio_tracks=[audio_track], sub_tracks=[sub_track]
+        )
         analysis = make_analysis(
             {1: ep},
             common_audio=[audio_track.identity_key],
@@ -596,7 +595,8 @@ class TestBuildMergePlan:
         )
 
         ep = make_episode(
-            1, video_file,
+            1,
+            video_file,
             audio_tracks=[audio_track],
             external_subs={"EngSubs": external_sub},
         )
