@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="anime-mux logo" width="200">
+</p>
+
 # anime-mux
 
 A command-line tool for consolidating anime releases into clean, player-friendly MKV files.
