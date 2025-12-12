@@ -23,5 +23,6 @@ packages = ["src/anime_mux"]
 dev = [
     "mypy>=1.19.0",
     "pytest>=8.0.0",
+    "pytest-cov>=7.0.0",
     "ruff>=0.14.9",
 ]
