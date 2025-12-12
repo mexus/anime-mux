@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 import typer
-from rich.prompt import Confirm, Prompt
+from InquirerPy import inquirer
 
 from . import __version__
 from .analyzer import analyze_series
@@ -56,6 +56,18 @@ def main(
         "-s",
         help="Directory to search for external subtitle files",
     ),
+    copy_audio: bool = typer.Option(
+        False,
+        "--copy-audio",
+        "-c",
+        help="Copy audio without re-encoding (default: re-encode to AAC)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-V",
+        help="Print ffmpeg commands before executing",
+    ),
     version: bool = typer.Option(
         None,
         "--version",
@@ -72,7 +84,7 @@ def main(
     and/or merging external audio/subtitle files into clean MKV containers.
     """
     try:
-        _run(directory, output, audio_dir, subs_dir)
+        _run(directory, output, audio_dir, subs_dir, copy_audio, verbose)
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user.[/yellow]")
         sys.exit(1)
@@ -86,6 +98,8 @@ def _run(
     output: Optional[Path],
     audio_dir: Optional[Path],
     subs_dir: Optional[Path],
+    copy_audio: bool,
+    verbose: bool,
 ):
     """Main workflow."""
     console.print(f"\n[bold]anime-mux v{__version__}[/bold]")
@@ -141,33 +155,30 @@ def _run(
         if len(existing) > 5:
             console.print(f"  [dim]... and {len(existing) - 5} more[/dim]")
 
-        console.print("\nWhat would you like to do?")
-        console.print("  [cyan]o[/cyan] - Overwrite existing files")
-        console.print("  [cyan]s[/cyan] - Skip existing files (process only new)")
-        console.print("  [cyan]a[/cyan] - Abort")
+        choice = inquirer.select(
+            message="What would you like to do?",
+            choices=[
+                {"name": "Skip existing files (process only new)", "value": "s"},
+                {"name": "Overwrite existing files", "value": "o"},
+                {"name": "Abort", "value": "a"},
+            ],
+            default="s",
+        ).execute()
 
-        while True:
-            choice = Prompt.ask(
-                "Choice",
-                choices=["o", "s", "a"],
-                default="s",
-            )
-            if choice == "o":
-                overwrite = True
-                break
-            elif choice == "s":
-                overwrite = False
-                break
-            elif choice == "a":
-                console.print("[yellow]Aborted.[/yellow]")
-                sys.exit(0)
+        if choice == "o":
+            overwrite = True
+        elif choice == "s":
+            overwrite = False
+        elif choice == "a":
+            console.print("[yellow]Aborted.[/yellow]")
+            sys.exit(0)
     else:
-        if not Confirm.ask("\nProceed with merge?", default=True):
+        if not inquirer.confirm(message="Proceed with merge?", default=True).execute():
             console.print("[yellow]Aborted.[/yellow]")
             sys.exit(0)
 
     # Phase 5: Execute
-    successful, failed, skipped = execute_plan(plan, overwrite=overwrite)
+    successful, failed, skipped = execute_plan(plan, overwrite=overwrite, copy_audio=copy_audio, verbose=verbose)
 
     # Summary
     console.print("\n" + "=" * 50)

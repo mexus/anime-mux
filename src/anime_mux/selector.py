@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
-from rich.prompt import Prompt
 from rich.table import Table
 
 from .analyzer import get_track_by_identity
@@ -273,37 +272,40 @@ def _handle_gaps(
                 console.print(
                     f"\n[yellow]Episode {ep_num} is missing from [{selection.identifier}].[/yellow]"
                 )
-                console.print(f"Available alternatives: {alternatives}")
 
-                while True:
-                    choice = Prompt.ask(
-                        f"Use which source for episode {ep_num}? (or 'skip'/'abort')",
-                        default=alternatives[0] if len(alternatives) == 1 else None,
-                    )
+                choices = [{"name": alt, "value": alt} for alt in alternatives]
+                choices.append({"name": "Skip this episode", "value": "skip"})
+                choices.append({"name": "Abort", "value": "abort"})
 
-                    if choice.lower() == "skip":
-                        skipped.append(ep_num)
-                        break
-                    elif choice.lower() == "abort":
-                        raise AbortError("User aborted due to missing episode")
-                    elif choice in alternatives:
-                        substitutions[ep_num] = choice
-                        break
-                    else:
-                        console.print(f"[red]Invalid choice. Options: {alternatives + ['skip', 'abort']}[/red]")
+                choice = inquirer.select(
+                    message=f"Use which source for episode {ep_num}?",
+                    choices=choices,
+                    default=alternatives[0] if len(alternatives) == 1 else None,
+                ).execute()
+
+                if choice == "skip":
+                    skipped.append(ep_num)
+                elif choice == "abort":
+                    raise AbortError("User aborted due to missing episode")
+                else:
+                    substitutions[ep_num] = choice
             else:
                 console.print(
                     f"\n[yellow]Episode {ep_num} has no available {track_type}.[/yellow]"
                 )
-                while True:
-                    choice = Prompt.ask(
-                        f"[S]kip episode {ep_num} or [A]bort?",
-                        default="s",
-                    )
-                    if choice.lower() in ("s", "skip"):
-                        skipped.append(ep_num)
-                        break
-                    elif choice.lower() in ("a", "abort"):
-                        raise AbortError("User aborted due to missing episode")
+
+                choice = inquirer.select(
+                    message=f"Episode {ep_num} has no {track_type}. What to do?",
+                    choices=[
+                        {"name": "Skip this episode", "value": "skip"},
+                        {"name": "Abort", "value": "abort"},
+                    ],
+                    default="skip",
+                ).execute()
+
+                if choice == "skip":
+                    skipped.append(ep_num)
+                elif choice == "abort":
+                    raise AbortError("User aborted due to missing episode")
 
     return substitutions, skipped

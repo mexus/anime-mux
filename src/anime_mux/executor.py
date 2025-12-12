@@ -1,25 +1,28 @@
 """Execute FFmpeg commands for merging."""
 
+import os
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskID
 
 from .models import MergeJob, MergePlan, Track
 from .utils import console
 
 
-def build_ffmpeg_command(job: MergeJob) -> list[str]:
+def build_ffmpeg_command(job: MergeJob, copy_audio: bool = False) -> list[str]:
     """
     Build FFmpeg command for a merge job.
 
     Key considerations:
     - Use -map to select specific streams
-    - Use -c copy to avoid transcoding
+    - Video/subtitles: stream copy (no transcoding)
+    - Audio: re-encode to AAC 256k (or copy if copy_audio=True)
     - Use -disposition to set default tracks
     - Preserve attachments (fonts) from source
     """
-    cmd = ["ffmpeg", "-y"]  # -y to overwrite
+    cmd = ["ffmpeg", "-y"]
 
     # Collect all input files
     input_files: list[Path] = []
@@ -58,9 +61,19 @@ def build_ffmpeg_command(job: MergeJob) -> list[str]:
     if job.preserve_attachments:
         primary_input = input_map[job.episode.video_file]
         cmd.extend(["-map", f"{primary_input}:t?"])  # :t for attachments, ? for optional
+        # Fix audio/video interleaving when attachments are mapped from a different
+        # input than audio. Without this, ffmpeg may write all audio packets first,
+        # causing players to appear to have no audio during video playback.
+        cmd.extend(["-max_interleave_delta", "0"])
 
-    # Copy all codecs (no transcoding)
-    cmd.extend(["-c", "copy"])
+    # Video, subtitles, attachments: copy (no transcoding)
+    # Audio: copy or re-encode to AAC
+    cmd.extend(["-c:v", "copy"])
+    if copy_audio:
+        cmd.extend(["-c:a", "copy"])
+    else:
+        cmd.extend(["-c:a", "aac", "-b:a", "256k"])
+    cmd.extend(["-c:s", "copy"])
 
     # Set dispositions (first audio and first subtitle are default)
     if job.audio_tracks:
@@ -79,43 +92,64 @@ def build_ffmpeg_command(job: MergeJob) -> list[str]:
     return cmd
 
 
-def run_ffmpeg(cmd: list[str], description: str) -> bool:
+def run_ffmpeg(cmd: list[str]) -> tuple[bool, str | None]:
     """
     Run FFmpeg command with proper error handling.
 
     Returns:
-        True if successful, False otherwise.
+        Tuple of (success, error_message). error_message is None on success.
     """
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             check=True,
             capture_output=True,
             text=True,
             encoding="utf-8",
         )
-        return True
+        return True, None
     except subprocess.CalledProcessError as e:
-        console.print(f"[red]Error: {description}[/red]")
+        # Extract error lines from stderr
+        error_lines = []
         if e.stderr:
-            # Filter for actual error messages
             for line in e.stderr.split("\n"):
                 if "error" in line.lower() or "invalid" in line.lower():
-                    console.print(f"[dim]{line}[/dim]")
-        return False
+                    error_lines.append(line)
+        return False, "\n".join(error_lines) if error_lines else "Unknown error"
     except FileNotFoundError:
-        console.print("[red]Error: ffmpeg not found in PATH[/red]")
-        console.print("[yellow]Install ffmpeg: https://ffmpeg.org/download.html[/yellow]")
-        return False
+        return False, "ffmpeg not found in PATH"
 
 
-def execute_plan(plan: MergePlan, overwrite: bool = False) -> tuple[int, int, int]:
+def _process_job(job: MergeJob, overwrite: bool, copy_audio: bool, verbose: bool = False) -> tuple[int, bool, str | None]:
     """
-    Execute all jobs in a merge plan.
+    Process a single merge job.
+
+    Returns:
+        Tuple of (episode_number, success, error_message)
+    """
+    # Check if output already exists
+    if job.output_path.exists() and not overwrite:
+        return job.episode.number, None, None  # None success = skipped
+
+    # Build and execute command
+    cmd = build_ffmpeg_command(job, copy_audio=copy_audio)
+    if verbose:
+        import shlex
+        console.print(f"\n[dim]Episode {job.episode.number}:[/dim]")
+        console.print(f"[yellow]{shlex.join(cmd)}[/yellow]\n")
+    success, error = run_ffmpeg(cmd)
+    return job.episode.number, success, error
+
+
+def execute_plan(plan: MergePlan, overwrite: bool = False, copy_audio: bool = False, verbose: bool = False) -> tuple[int, int, int]:
+    """
+    Execute all jobs in a merge plan using parallel processing.
 
     Args:
         plan: The merge plan to execute
         overwrite: If True, overwrite existing output files. If False, skip them.
+        copy_audio: If True, copy audio without re-encoding. If False, re-encode to AAC.
+        verbose: If True, print ffmpeg commands before executing.
 
     Returns:
         Tuple of (successful_count, failed_count, skipped_count)
@@ -123,11 +157,16 @@ def execute_plan(plan: MergePlan, overwrite: bool = False) -> tuple[int, int, in
     # Create output directory
     plan.output_directory.mkdir(parents=True, exist_ok=True)
 
-    console.print(f"\n[blue]Processing {len(plan.jobs)} files...[/blue]")
+    # Calculate number of workers (half of CPU cores, minimum 1)
+    # Use 1 worker if verbose to keep output readable
+    num_workers = 1 if verbose else max(1, (os.cpu_count() or 2) // 2)
+
+    console.print(f"\n[blue]Processing {len(plan.jobs)} files using {num_workers} workers...[/blue]")
 
     successful = 0
     failed = 0
     skipped = 0
+    errors: list[tuple[int, str]] = []  # (episode, error_msg)
 
     with Progress(
         SpinnerColumn(),
@@ -138,27 +177,31 @@ def execute_plan(plan: MergePlan, overwrite: bool = False) -> tuple[int, int, in
     ) as progress:
         task = progress.add_task("Merging", total=len(plan.jobs))
 
-        for job in plan.jobs:
-            progress.update(task, description=f"Ep {job.episode.number}")
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            # Submit all jobs
+            futures = {
+                executor.submit(_process_job, job, overwrite, copy_audio, verbose): job
+                for job in plan.jobs
+            }
 
-            # Check if output already exists
-            if job.output_path.exists() and not overwrite:
-                skipped += 1
+            # Process completed jobs as they finish
+            for future in as_completed(futures):
+                ep_num, success, error = future.result()
+
+                if success is None:
+                    # Skipped
+                    skipped += 1
+                elif success:
+                    successful += 1
+                else:
+                    failed += 1
+                    errors.append((ep_num, error or "Unknown error"))
+
                 progress.advance(task)
-                continue
 
-            # Build and execute command
-            cmd = build_ffmpeg_command(job)
-
-            if run_ffmpeg(cmd, f"Episode {job.episode.number}"):
-                successful += 1
-            else:
-                failed += 1
-                console.print(
-                    f"[red]Failed to process episode {job.episode.number}[/red]"
-                )
-
-            progress.advance(task)
+    # Print errors at the end (cleaner output)
+    for ep_num, error in sorted(errors):
+        console.print(f"[red]Episode {ep_num} failed:[/red] [dim]{error}[/dim]")
 
     return successful, failed, skipped
 
