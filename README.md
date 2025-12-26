@@ -53,6 +53,8 @@ anime-mux <directory>
 | `--audio-dir PATH` | `-a` | Directory to search for external audio files |
 | `--subs-dir PATH` | `-s` | Directory to search for external subtitle files |
 | `--transcode-audio` | `-t` | Re-encode audio to AAC 256k (default: copy as-is) |
+| `--video-codec CODEC` | `-c` | Video codec: `copy` (default) or `h264` (re-encode) |
+| `--crf VALUE` | | CRF for H.264 encoding (0-51, lower=better). Auto-calculated if not set. |
 | `--verbose` | `-V` | Print ffmpeg commands before executing |
 | `--version` | `-v` | Show version and exit |
 

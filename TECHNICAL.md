@@ -1,5 +1,31 @@
 # Technical Notes
 
+## H.264 Re-encoding with Auto CRF
+
+When using `--video-codec h264`, CRF is automatically calculated based on source resolution and bitrate.
+
+### Base CRF by Resolution
+
+| Resolution | Base CRF | Typical Bitrate |
+|------------|----------|-----------------|
+| 4K (2160p+)| 17       | 20 Mbps         |
+| 1080p      | 19       | 8 Mbps          |
+| 720p       | 21       | 4 Mbps          |
+| 480p       | 23       | 2 Mbps          |
+| Lower      | 25       | 1 Mbps          |
+
+### Bitrate Adjustment
+
+The base CRF is adjusted based on source bitrate relative to typical values:
+
+- Source > 2× typical: CRF -= 2 (preserve quality of high-bitrate source)
+- Source > 1.5× typical: CRF -= 1
+- Source < 0.5× typical: CRF += 1 (source already low quality)
+
+### Implementation
+
+See `VideoEncodingConfig.calculate_crf()` in `models.py`. The algorithm extracts resolution and bitrate from ffprobe during analysis (`probe.py`), then calculates CRF at encoding time.
+
 ## FFmpeg Interleaving Bug Workaround
 
 When mapping attachments (fonts) from one input file while taking audio from a different input file, FFmpeg exhibits a bug where audio/video packets are not properly interleaved in the output Matroska container.
