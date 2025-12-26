@@ -7,11 +7,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
+    TaskID,
     TaskProgressColumn,
+    TextColumn,
     TimeRemainingColumn,
 )
 
@@ -156,7 +157,7 @@ def run_ffmpeg_with_progress(
     cmd: list[str],
     duration_seconds: float,
     progress: Progress,
-    task_id: int,
+    task_id: TaskID,
 ) -> tuple[bool, str | None]:
     """
     Run FFmpeg command with real-time progress updates.
@@ -187,8 +188,11 @@ def run_ffmpeg_with_progress(
         out_time_pattern = re.compile(r"out_time_us=(\d+)")
         error_output = []
 
+        stdout = process.stdout
+        assert stdout is not None, "stdout should be available with PIPE"
+
         while True:
-            line = process.stdout.readline()
+            line = stdout.readline()
             if not line and process.poll() is not None:
                 break
 
@@ -320,7 +324,7 @@ def _execute_with_progress(
                 duration = 1.0  # Fallback to avoid division by zero
 
             # Create task for this file
-            task_desc = f"[{i+1}/{len(plan.jobs)}] {job.output_path.name}"
+            task_desc = f"[{i + 1}/{len(plan.jobs)}] {job.output_path.name}"
             task_id = progress.add_task(task_desc, total=100)
 
             # Build and execute command with progress
