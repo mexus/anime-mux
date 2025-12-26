@@ -1,13 +1,22 @@
 """Execute FFmpeg commands for merging."""
 
 import os
+import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TimeRemainingColumn,
+)
 
-from .models import MergeJob, MergePlan
+from .models import MergeJob, MergePlan, VideoCodec
+from .probe import get_duration
 from .utils import console
 
 
@@ -68,9 +77,30 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
         # causing players to appear to have no audio during video playback.
         cmd.extend(["-max_interleave_delta", "0"])
 
-    # Video, subtitles, attachments: copy (no transcoding)
+    # Video codec handling
+    if job.video_encoding.codec == VideoCodec.COPY:
+        cmd.extend(["-c:v", "copy"])
+    elif job.video_encoding.codec == VideoCodec.H264:
+        cmd.extend(["-c:v", "libx264"])
+
+        # Calculate CRF based on first video track's metadata
+        if job.video_tracks:
+            video_track = job.video_tracks[0]
+            crf = job.video_encoding.calculate_crf(
+                width=video_track.width,
+                height=video_track.height,
+                bitrate=video_track.bitrate,
+            )
+        else:
+            # Fallback if no video track metadata
+            crf = job.video_encoding.crf if job.video_encoding.crf else 19
+
+        cmd.extend(["-crf", str(crf)])
+        cmd.extend(["-preset", "medium"])
+        # Ensure output is compatible with most players
+        cmd.extend(["-pix_fmt", "yuv420p"])
+
     # Audio: copy or re-encode to AAC
-    cmd.extend(["-c:v", "copy"])
     if transcode_audio:
         cmd.extend(["-c:a", "aac", "-b:a", "256k"])
     else:
@@ -122,6 +152,75 @@ def run_ffmpeg(cmd: list[str]) -> tuple[bool, str | None]:
         return False, "ffmpeg not found in PATH"
 
 
+def run_ffmpeg_with_progress(
+    cmd: list[str],
+    duration_seconds: float,
+    progress: Progress,
+    task_id: int,
+) -> tuple[bool, str | None]:
+    """
+    Run FFmpeg command with real-time progress updates.
+
+    Args:
+        cmd: FFmpeg command to run
+        duration_seconds: Total duration of the video in seconds
+        progress: Rich Progress instance
+        task_id: Task ID for progress updates
+
+    Returns:
+        Tuple of (success, error_message). error_message is None on success.
+    """
+    # Add progress output to FFmpeg command
+    # Insert before output file (last argument)
+    cmd_with_progress = cmd[:-1] + ["-progress", "pipe:1", "-nostats", cmd[-1]]
+
+    try:
+        process = subprocess.Popen(
+            cmd_with_progress,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+
+        # Parse progress output
+        out_time_pattern = re.compile(r"out_time_us=(\d+)")
+        error_output = []
+
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+
+            # Parse out_time_us (microseconds)
+            match = out_time_pattern.match(line)
+            if match:
+                out_time_us = int(match.group(1))
+                out_time_seconds = out_time_us / 1_000_000
+                # Update progress (percentage)
+                percent = min(100, (out_time_seconds / duration_seconds) * 100)
+                progress.update(task_id, completed=percent)
+
+        # Capture any remaining stderr
+        _, stderr = process.communicate()
+        if stderr:
+            for line in stderr.split("\n"):
+                if "error" in line.lower() or "invalid" in line.lower():
+                    error_output.append(line)
+
+        if process.returncode != 0:
+            return False, "\n".join(error_output) if error_output else "Unknown error"
+
+        # Mark as complete
+        progress.update(task_id, completed=100)
+        return True, None
+
+    except FileNotFoundError:
+        return False, "ffmpeg not found in PATH"
+    except Exception as e:
+        return False, str(e)
+
+
 def _process_job(
     job: MergeJob, overwrite: bool, transcode_audio: bool, verbose: bool = False
 ) -> tuple[int, bool, str | None]:
@@ -167,18 +266,95 @@ def execute_plan(
     # Create output directory
     plan.output_directory.mkdir(parents=True, exist_ok=True)
 
-    # Calculate number of workers (half of CPU cores, minimum 1)
-    # Use 1 worker if verbose to keep output readable
-    num_workers = 1 if verbose else max(1, (os.cpu_count() or 2) // 2)
+    # Calculate number of workers
+    # - 1 worker if verbose (to keep output readable)
+    # - 1 worker if video encoding (libx264 already uses multiple threads internally)
+    # - Otherwise, half of CPU cores for stream-copy operations (I/O bound)
+    is_encoding_video = (
+        plan.jobs and plan.jobs[0].video_encoding.codec == VideoCodec.H264
+    )
+    if verbose or is_encoding_video:
+        num_workers = 1
+    else:
+        num_workers = max(1, (os.cpu_count() or 2) // 2)
 
     console.print(
         f"\n[blue]Processing {len(plan.jobs)} files using {num_workers} workers...[/blue]"
     )
 
+    # Use different execution paths for encoding vs copying
+    if is_encoding_video and not verbose:
+        return _execute_with_progress(plan, overwrite, transcode_audio)
+    else:
+        return _execute_parallel(plan, overwrite, transcode_audio, verbose, num_workers)
+
+
+def _execute_with_progress(
+    plan: MergePlan,
+    overwrite: bool,
+    transcode_audio: bool,
+) -> tuple[int, int, int]:
+    """Execute jobs sequentially with per-file progress (for encoding)."""
     successful = 0
     failed = 0
     skipped = 0
-    errors: list[tuple[int, str]] = []  # (episode, error_msg)
+    errors: list[tuple[int, str]] = []
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        for i, job in enumerate(plan.jobs):
+            # Check if output already exists
+            if job.output_path.exists() and not overwrite:
+                skipped += 1
+                continue
+
+            # Get duration for progress calculation
+            duration = get_duration(job.episode.video_file)
+            if duration is None or duration <= 0:
+                duration = 1.0  # Fallback to avoid division by zero
+
+            # Create task for this file
+            task_desc = f"[{i+1}/{len(plan.jobs)}] {job.output_path.name}"
+            task_id = progress.add_task(task_desc, total=100)
+
+            # Build and execute command with progress
+            cmd = build_ffmpeg_command(job, transcode_audio=transcode_audio)
+            success, error = run_ffmpeg_with_progress(cmd, duration, progress, task_id)
+
+            # Update task to show completion status
+            if success:
+                successful += 1
+                progress.update(task_id, description=f"[green]✓[/green] {task_desc}")
+            else:
+                failed += 1
+                errors.append((job.episode.number, error or "Unknown error"))
+                progress.update(task_id, description=f"[red]✗[/red] {task_desc}")
+
+    # Print errors at the end
+    for ep_num, error in sorted(errors):
+        console.print(f"[red]Episode {ep_num} failed:[/red] [dim]{error}[/dim]")
+
+    return successful, failed, skipped
+
+
+def _execute_parallel(
+    plan: MergePlan,
+    overwrite: bool,
+    transcode_audio: bool,
+    verbose: bool,
+    num_workers: int,
+) -> tuple[int, int, int]:
+    """Execute jobs in parallel (for stream-copy operations)."""
+    successful = 0
+    failed = 0
+    skipped = 0
+    errors: list[tuple[int, str]] = []
 
     with Progress(
         SpinnerColumn(),

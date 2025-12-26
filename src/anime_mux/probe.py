@@ -30,6 +30,23 @@ def check_ffprobe() -> bool:
         return False
 
 
+def get_duration(file_path: Path) -> float | None:
+    """
+    Get the duration of a media file in seconds.
+
+    Returns None if duration cannot be determined.
+    """
+    try:
+        probe_data = probe_file(file_path)
+        format_info = probe_data.get("format", {})
+        duration_str = format_info.get("duration")
+        if duration_str:
+            return float(duration_str)
+        return None
+    except (ProbeError, ValueError):
+        return None
+
+
 def probe_file(file_path: Path) -> dict:
     """
     Run ffprobe and return parsed JSON.
@@ -75,6 +92,17 @@ def parse_tracks(probe_data: dict, source_file: Path) -> list[Track]:
     """Convert ffprobe output to Track objects."""
     tracks = []
 
+    # Get format-level bitrate as fallback (when stream bitrate is unavailable)
+    format_info = probe_data.get("format", {})
+    format_bitrate = format_info.get("bit_rate")
+    if format_bitrate:
+        try:
+            format_bitrate = int(format_bitrate)
+        except (ValueError, TypeError):
+            format_bitrate = None
+    else:
+        format_bitrate = None
+
     for stream in probe_data.get("streams", []):
         codec_type = stream.get("codec_type")
 
@@ -92,6 +120,24 @@ def parse_tracks(probe_data: dict, source_file: Path) -> list[Track]:
         tags = stream.get("tags", {})
         disposition = stream.get("disposition", {})
 
+        # Extract video-specific metadata
+        width = None
+        height = None
+        bitrate = None
+
+        if codec_type == "video":
+            width = stream.get("width")
+            height = stream.get("height")
+            # Try stream-level bitrate first, fall back to format bitrate
+            stream_bitrate = stream.get("bit_rate")
+            if stream_bitrate:
+                try:
+                    bitrate = int(stream_bitrate)
+                except (ValueError, TypeError):
+                    bitrate = format_bitrate
+            else:
+                bitrate = format_bitrate
+
         track = Track(
             index=stream["index"],
             track_type=track_type,
@@ -103,6 +149,9 @@ def parse_tracks(probe_data: dict, source_file: Path) -> list[Track]:
             channels=stream.get("channels") if codec_type == "audio" else None,
             is_forced=disposition.get("forced", 0) == 1,
             is_default=disposition.get("default", 0) == 1,
+            width=width,
+            height=height,
+            bitrate=bitrate,
         )
         tracks.append(track)
 

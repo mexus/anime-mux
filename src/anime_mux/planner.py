@@ -5,7 +5,15 @@ from pathlib import Path
 from rich.table import Table
 
 from .analyzer import get_track_by_identity
-from .models import AnalysisResult, Episode, MergeJob, MergePlan, Track, TrackType
+from .models import (
+    AnalysisResult,
+    Episode,
+    MergeJob,
+    MergePlan,
+    Track,
+    TrackType,
+    VideoEncodingConfig,
+)
 from .selector import SelectionResult
 from .utils import console
 
@@ -77,6 +85,7 @@ def build_merge_plan(
     analysis: AnalysisResult,
     selection_result: SelectionResult,
     output_dir: Path,
+    video_encoding: VideoEncodingConfig | None = None,
 ) -> MergePlan:
     """
     Build a merge plan from analysis and user selections.
@@ -85,12 +94,14 @@ def build_merge_plan(
         analysis: The analysis result
         selection_result: User's track selections
         output_dir: Directory for output files
+        video_encoding: Optional video encoding configuration
 
     Returns:
         MergePlan ready for execution
     """
     jobs: list[MergeJob] = []
     skipped = list(selection_result.skipped_episodes)
+    encoding_config = video_encoding or VideoEncodingConfig()
 
     for ep_num, episode in sorted(analysis.episodes.items()):
         if ep_num in skipped:
@@ -119,6 +130,7 @@ def build_merge_plan(
             audio_tracks=audio_tracks,
             subtitle_tracks=subtitle_tracks,
             preserve_attachments=True,
+            video_encoding=encoding_config,
         )
         jobs.append(job)
 

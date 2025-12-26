@@ -22,6 +22,77 @@ class TrackSource(Enum):
     EXTERNAL = auto()
 
 
+class VideoCodec(Enum):
+    """Supported video codecs for re-encoding."""
+
+    COPY = auto()  # Stream copy (no re-encoding)
+    H264 = auto()  # libx264
+
+
+@dataclass
+class VideoEncodingConfig:
+    """Configuration for video encoding."""
+
+    codec: VideoCodec = VideoCodec.COPY
+    crf: Optional[int] = None  # If None, auto-calculate based on source
+
+    def calculate_crf(
+        self, width: Optional[int], height: Optional[int], bitrate: Optional[int]
+    ) -> int:
+        """
+        Calculate optimal CRF based on resolution and bitrate.
+
+        Base CRF by resolution:
+        - 4K (2160p+): 17
+        - 1080p: 19
+        - 720p: 21
+        - 480p: 23
+        - Lower: 25
+
+        Bitrate adjustment:
+        - If source bitrate is significantly higher than typical for resolution,
+          lower CRF by 1-2 to preserve quality.
+        """
+        if self.crf is not None:
+            return self.crf
+
+        # Use defaults if dimensions unknown
+        h = height or 1080
+
+        # Base CRF by resolution (using height as primary indicator)
+        if h >= 2160:
+            base_crf = 17
+            typical_bitrate = 20_000_000  # 20 Mbps typical for 4K anime
+        elif h >= 1080:
+            base_crf = 19
+            typical_bitrate = 8_000_000  # 8 Mbps typical for 1080p anime
+        elif h >= 720:
+            base_crf = 21
+            typical_bitrate = 4_000_000  # 4 Mbps typical for 720p anime
+        elif h >= 480:
+            base_crf = 23
+            typical_bitrate = 2_000_000  # 2 Mbps typical for 480p
+        else:
+            base_crf = 25
+            typical_bitrate = 1_000_000  # 1 Mbps for lower res
+
+        # Adjust based on source bitrate
+        if bitrate is not None and bitrate > 0:
+            ratio = bitrate / typical_bitrate
+            if ratio > 2.0:
+                # Very high bitrate source - preserve more quality
+                base_crf -= 2
+            elif ratio > 1.5:
+                # High bitrate source
+                base_crf -= 1
+            elif ratio < 0.5:
+                # Low bitrate source - don't need to preserve as much
+                base_crf += 1
+
+        # Clamp to valid range
+        return max(0, min(51, base_crf))
+
+
 @dataclass
 class Track:
     """Represents a single track (audio, subtitle, etc.)."""
@@ -36,6 +107,10 @@ class Track:
     channels: Optional[int] = None
     is_forced: bool = False
     is_default: bool = False
+    # Video metadata (only populated for VIDEO tracks)
+    width: Optional[int] = None
+    height: Optional[int] = None
+    bitrate: Optional[int] = None  # bits per second
 
     @property
     def display_name(self) -> str:
@@ -116,6 +191,7 @@ class MergeJob:
     audio_tracks: list[Track] = field(default_factory=list)
     subtitle_tracks: list[Track] = field(default_factory=list)
     preserve_attachments: bool = True
+    video_encoding: VideoEncodingConfig = field(default_factory=VideoEncodingConfig)
 
 
 @dataclass

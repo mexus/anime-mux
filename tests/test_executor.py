@@ -3,7 +3,15 @@
 from pathlib import Path
 
 from anime_mux.executor import build_ffmpeg_command
-from anime_mux.models import Episode, MergeJob, Track, TrackSource, TrackType
+from anime_mux.models import (
+    Episode,
+    MergeJob,
+    Track,
+    TrackSource,
+    TrackType,
+    VideoCodec,
+    VideoEncodingConfig,
+)
 
 
 def make_video_track(source_file: Path, index: int = 0) -> Track:
@@ -430,3 +438,250 @@ class TestBuildFfmpegCommand:
         mappings = [cmd[i + 1] for i, x in enumerate(cmd) if x == "-map"]
         for m in mappings:
             assert m.startswith("0:")
+
+
+class TestH264Encoding:
+    """Tests for H.264 video encoding in build_ffmpeg_command."""
+
+    def test_h264_encoding_uses_libx264(self):
+        """H.264 encoding uses libx264 codec."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        video_track = make_video_track(video_file, index=0)
+        video_track.width = 1920
+        video_track.height = 1080
+        video_track.bitrate = 8_000_000
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[video_track],
+            audio_tracks=[make_audio_track(video_file, index=1)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.H264),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_cv = cmd.index("-c:v")
+        assert cmd[idx_cv + 1] == "libx264"
+        assert "-crf" in cmd
+        assert "-preset" in cmd
+        assert "-pix_fmt" in cmd
+
+    def test_h264_encoding_with_explicit_crf(self):
+        """Explicit CRF value is used."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[make_video_track(video_file)],
+            audio_tracks=[make_audio_track(video_file)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.H264, crf=18),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_crf = cmd.index("-crf")
+        assert cmd[idx_crf + 1] == "18"
+
+    def test_h264_encoding_auto_crf_1080p(self):
+        """Auto CRF for 1080p uses correct value."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        video_track = make_video_track(video_file, index=0)
+        video_track.width = 1920
+        video_track.height = 1080
+        video_track.bitrate = 8_000_000  # typical bitrate
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[video_track],
+            audio_tracks=[make_audio_track(video_file, index=1)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.H264),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_crf = cmd.index("-crf")
+        assert cmd[idx_crf + 1] == "19"  # base CRF for 1080p
+
+    def test_h264_encoding_preset_medium(self):
+        """H.264 encoding uses medium preset."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[make_video_track(video_file)],
+            audio_tracks=[make_audio_track(video_file)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.H264),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_preset = cmd.index("-preset")
+        assert cmd[idx_preset + 1] == "medium"
+
+    def test_h264_encoding_yuv420p_pixel_format(self):
+        """H.264 encoding uses yuv420p pixel format for compatibility."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[make_video_track(video_file)],
+            audio_tracks=[make_audio_track(video_file)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.H264),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_pix = cmd.index("-pix_fmt")
+        assert cmd[idx_pix + 1] == "yuv420p"
+
+    def test_copy_mode_no_encoding_params(self):
+        """Copy mode doesn't add encoding parameters."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[make_video_track(video_file)],
+            audio_tracks=[make_audio_track(video_file)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.COPY),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_cv = cmd.index("-c:v")
+        assert cmd[idx_cv + 1] == "copy"
+        assert "-crf" not in cmd
+        assert "-preset" not in cmd
+        assert "-pix_fmt" not in cmd
+
+    def test_default_encoding_is_copy(self):
+        """Default video encoding config uses copy mode."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[make_video_track(video_file)],
+            audio_tracks=[make_audio_track(video_file)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            # No video_encoding specified, uses default
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_cv = cmd.index("-c:v")
+        assert cmd[idx_cv + 1] == "copy"
+
+
+class TestVideoEncodingConfig:
+    """Tests for VideoEncodingConfig CRF calculation."""
+
+    def test_explicit_crf_returned(self):
+        """Explicit CRF value is returned without calculation."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264, crf=18)
+        assert config.calculate_crf(1920, 1080, 10_000_000) == 18
+
+    def test_4k_base_crf(self):
+        """4K resolution uses CRF 17."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        crf = config.calculate_crf(3840, 2160, None)
+        assert crf == 17
+
+    def test_1080p_base_crf(self):
+        """1080p resolution uses CRF 19."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        crf = config.calculate_crf(1920, 1080, None)
+        assert crf == 19
+
+    def test_720p_base_crf(self):
+        """720p resolution uses CRF 21."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        crf = config.calculate_crf(1280, 720, None)
+        assert crf == 21
+
+    def test_480p_base_crf(self):
+        """480p resolution uses CRF 23."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        crf = config.calculate_crf(854, 480, None)
+        assert crf == 23
+
+    def test_low_res_base_crf(self):
+        """Low resolution (<480p) uses CRF 25."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        crf = config.calculate_crf(640, 360, None)
+        assert crf == 25
+
+    def test_high_bitrate_lowers_crf(self):
+        """Very high bitrate source lowers CRF by 2."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        # 1080p with very high bitrate (20 Mbps = 2.5x typical 8 Mbps)
+        crf = config.calculate_crf(1920, 1080, 20_000_000)
+        assert crf == 17  # base 19 - 2
+
+    def test_moderately_high_bitrate_lowers_crf(self):
+        """Moderately high bitrate source lowers CRF by 1."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        # 1080p with high bitrate (13 Mbps = 1.6x typical)
+        crf = config.calculate_crf(1920, 1080, 13_000_000)
+        assert crf == 18  # base 19 - 1
+
+    def test_low_bitrate_raises_crf(self):
+        """Low bitrate source raises CRF by 1."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        # 1080p with low bitrate (3 Mbps = 0.375x typical)
+        crf = config.calculate_crf(1920, 1080, 3_000_000)
+        assert crf == 20  # base 19 + 1
+
+    def test_typical_bitrate_uses_base_crf(self):
+        """Typical bitrate uses base CRF unchanged."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        # 1080p with typical bitrate (8 Mbps)
+        crf = config.calculate_crf(1920, 1080, 8_000_000)
+        assert crf == 19  # base, no adjustment
+
+    def test_crf_clamped_minimum(self):
+        """CRF is clamped to minimum 0."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        # 4K with extremely high bitrate
+        crf = config.calculate_crf(3840, 2160, 100_000_000)
+        assert crf >= 0
+
+    def test_crf_clamped_maximum(self):
+        """CRF is clamped to maximum 51."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        # Very low res with very low bitrate
+        crf = config.calculate_crf(320, 240, 100_000)
+        assert crf <= 51
+
+    def test_none_dimensions_uses_defaults(self):
+        """None dimensions use 1080p defaults."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264)
+        crf = config.calculate_crf(None, None, None)
+        assert crf == 19  # 1080p default

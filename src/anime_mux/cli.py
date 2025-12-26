@@ -10,6 +10,7 @@ from InquirerPy import inquirer
 from . import __version__
 from .analyzer import analyze_series
 from .executor import check_existing_outputs, execute_plan
+from .models import VideoCodec, VideoEncodingConfig
 from .planner import build_merge_plan, display_merge_plan
 from .probe import check_ffprobe
 from .selector import AbortError, display_analysis, select_tracks
@@ -62,6 +63,17 @@ def main(
         "-t",
         help="Re-encode audio to AAC 256k (default: copy audio as-is)",
     ),
+    video_codec: str = typer.Option(
+        "copy",
+        "--video-codec",
+        "-c",
+        help="Video codec: 'copy' (default) or 'h264' (re-encode to H.264)",
+    ),
+    crf: Optional[int] = typer.Option(
+        None,
+        "--crf",
+        help="CRF value for H.264 encoding (0-51, lower=better). Auto-calculated if not set.",
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -83,8 +95,35 @@ def main(
     anime-mux consolidates anime releases by filtering embedded tracks
     and/or merging external audio/subtitle files into clean MKV containers.
     """
+    # Validate video codec
+    video_codec_lower = video_codec.lower()
+    if video_codec_lower not in ("copy", "h264"):
+        console.print(
+            f"[red]Error: Invalid video codec '{video_codec}'. Use 'copy' or 'h264'.[/red]"
+        )
+        sys.exit(1)
+
+    # Validate CRF if provided
+    if crf is not None:
+        if not (0 <= crf <= 51):
+            console.print("[red]Error: CRF must be between 0 and 51.[/red]")
+            sys.exit(1)
+        if video_codec_lower == "copy":
+            console.print(
+                "[yellow]Warning: --crf is ignored when --video-codec is 'copy'.[/yellow]"
+            )
+
     try:
-        _run(directory, output, audio_dir, subs_dir, transcode_audio, verbose)
+        _run(
+            directory,
+            output,
+            audio_dir,
+            subs_dir,
+            transcode_audio,
+            video_codec_lower,
+            crf,
+            verbose,
+        )
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user.[/yellow]")
         sys.exit(1)
@@ -99,11 +138,24 @@ def _run(
     audio_dir: Optional[Path],
     subs_dir: Optional[Path],
     transcode_audio: bool,
+    video_codec: str,
+    crf: Optional[int],
     verbose: bool,
 ):
     """Main workflow."""
     console.print(f"\n[bold]anime-mux v{__version__}[/bold]")
     console.print("=" * 50)
+
+    # Build video encoding config
+    codec_enum = VideoCodec.H264 if video_codec == "h264" else VideoCodec.COPY
+    video_encoding = VideoEncodingConfig(codec=codec_enum, crf=crf)
+
+    # Display encoding mode
+    if video_encoding.codec == VideoCodec.H264:
+        crf_msg = f"CRF {crf}" if crf else "auto CRF"
+        console.print(f"[blue]Video: H.264 encoding ({crf_msg})[/blue]")
+    else:
+        console.print("[dim]Video: copy (no re-encoding)[/dim]")
 
     # Check ffprobe
     if not check_ffprobe():
@@ -132,7 +184,7 @@ def _run(
     selection_result = select_tracks(analysis, audio_options, sub_options)
 
     # Phase 3: Build plan
-    plan = build_merge_plan(analysis, selection_result, output_dir)
+    plan = build_merge_plan(analysis, selection_result, output_dir, video_encoding)
 
     if not plan.jobs:
         console.print("[yellow]No files to process after selections.[/yellow]")
