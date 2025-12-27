@@ -27,7 +27,9 @@ class VideoCodec(Enum):
 
     COPY = auto()  # Stream copy (no re-encoding)
     H264 = auto()  # libx264 (software)
-    H264_AMF = auto()  # h264_amf (AMD hardware)
+    H264_VAAPI = auto()  # h264_vaapi (Linux VA-API, works with AMD/Intel)
+    HEVC = auto()  # libx265 (software)
+    HEVC_VAAPI = auto()  # hevc_vaapi (Linux VA-API, works with AMD/Intel)
 
 
 @dataclass
@@ -98,12 +100,12 @@ class VideoEncodingConfig:
         self, width: Optional[int], height: Optional[int], bitrate: Optional[int]
     ) -> int:
         """
-        Calculate optimal QP for AMD AMF encoder based on resolution and bitrate.
+        Calculate optimal QP for VA-API encoder based on resolution and bitrate.
 
-        QP (Quantization Parameter) is used by h264_amf instead of CRF.
-        The scale is similar (0-51, lower = better quality), but AMF's QP
-        tends to produce slightly lower quality than libx264's CRF at the
-        same value, so we use slightly lower (better) base values.
+        QP (Quantization Parameter) is used by h264_vaapi instead of CRF.
+        The scale is similar (0-51, lower = better quality), but hardware
+        encoders tend to produce slightly lower quality than libx264's CRF
+        at the same value, so we use slightly lower (better) base values.
 
         Base QP by resolution:
         - 4K (2160p+): 15

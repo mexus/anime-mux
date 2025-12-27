@@ -2,6 +2,7 @@
 
 import os
 import re
+import shlex
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -33,6 +34,14 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
     - Preserve attachments (fonts) from source
     """
     cmd = ["ffmpeg", "-y"]
+
+    # For VA-API, we need to specify the device and enable hardware decoding
+    is_vaapi = job.video_encoding.codec in (VideoCodec.H264_VAAPI, VideoCodec.HEVC_VAAPI)
+    if is_vaapi:
+        # Enable hardware decoding - keeps frames on GPU, avoiding CPU-GPU transfers
+        cmd.extend(["-hwaccel", "vaapi"])
+        cmd.extend(["-hwaccel_device", "/dev/dri/renderD128"])
+        cmd.extend(["-hwaccel_output_format", "vaapi"])
 
     # Collect all input files
     input_files: list[Path] = []
@@ -100,8 +109,11 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
         cmd.extend(["-preset", "medium"])
         # Ensure output is compatible with most players
         cmd.extend(["-pix_fmt", "yuv420p"])
-    elif job.video_encoding.codec == VideoCodec.H264_AMF:
-        cmd.extend(["-c:v", "h264_amf"])
+    elif job.video_encoding.codec == VideoCodec.H264_VAAPI:
+        # VA-API hardware encoding
+        # With -hwaccel_output_format vaapi, frames are already on GPU
+        # No filter needed - frames go directly from decoder to encoder
+        cmd.extend(["-c:v", "h264_vaapi"])
 
         # Calculate QP based on first video track's metadata
         if job.video_tracks:
@@ -115,14 +127,47 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
             # Fallback if no video track metadata
             qp = job.video_encoding.qp if job.video_encoding.qp else 17
 
-        # Use constant QP mode with quality-enhancing options
-        cmd.extend(["-rc", "cqp"])
-        cmd.extend(["-qp_i", str(qp), "-qp_p", str(qp)])
-        cmd.extend(["-quality", "quality"])
-        # Enable quality enhancement features (only work in VBR modes, but set for future)
-        cmd.extend(["-preanalysis", "true"])
+        cmd.extend(["-qp", str(qp)])
+        # Disable B-frames for better AMD compatibility
+        cmd.extend(["-bf", "0"])
+    elif job.video_encoding.codec == VideoCodec.HEVC:
+        cmd.extend(["-c:v", "libx265"])
+
+        # Calculate CRF based on first video track's metadata
+        if job.video_tracks:
+            video_track = job.video_tracks[0]
+            crf = job.video_encoding.calculate_crf(
+                width=video_track.width,
+                height=video_track.height,
+                bitrate=video_track.bitrate,
+            )
+        else:
+            # Fallback if no video track metadata
+            crf = job.video_encoding.crf if job.video_encoding.crf else 19
+
+        cmd.extend(["-crf", str(crf)])
+        cmd.extend(["-preset", "medium"])
         # Ensure output is compatible with most players
         cmd.extend(["-pix_fmt", "yuv420p"])
+    elif job.video_encoding.codec == VideoCodec.HEVC_VAAPI:
+        # VA-API hardware encoding
+        # With -hwaccel_output_format vaapi, frames are already on GPU
+        # No filter needed - frames go directly from decoder to encoder
+        cmd.extend(["-c:v", "hevc_vaapi"])
+
+        # Calculate QP based on first video track's metadata
+        if job.video_tracks:
+            video_track = job.video_tracks[0]
+            qp = job.video_encoding.calculate_qp(
+                width=video_track.width,
+                height=video_track.height,
+                bitrate=video_track.bitrate,
+            )
+        else:
+            # Fallback if no video track metadata
+            qp = job.video_encoding.qp if job.video_encoding.qp else 17
+
+        cmd.extend(["-qp", str(qp)])
 
     # Audio: copy or re-encode to AAC
     if transcode_audio:
@@ -171,7 +216,10 @@ def run_ffmpeg(cmd: list[str]) -> tuple[bool, str | None]:
             for line in e.stderr.split("\n"):
                 if "error" in line.lower() or "invalid" in line.lower():
                     error_lines.append(line)
-        return False, "\n".join(error_lines) if error_lines else "Unknown error"
+        error_msg = "\n".join(error_lines) if error_lines else "Unknown error"
+        # Include the full command for debugging
+        cmd_str = shlex.join(cmd)
+        return False, f"{error_msg}\n\nCommand: {cmd_str}"
     except FileNotFoundError:
         return False, "ffmpeg not found in PATH"
 
@@ -236,7 +284,10 @@ def run_ffmpeg_with_progress(
                     error_output.append(line)
 
         if process.returncode != 0:
-            return False, "\n".join(error_output) if error_output else "Unknown error"
+            error_msg = "\n".join(error_output) if error_output else "Unknown error"
+            # Include the full command for debugging
+            cmd_str = shlex.join(cmd)
+            return False, f"{error_msg}\n\nCommand: {cmd_str}"
 
         # Mark as complete
         progress.update(task_id, completed=100)
@@ -245,7 +296,9 @@ def run_ffmpeg_with_progress(
     except FileNotFoundError:
         return False, "ffmpeg not found in PATH"
     except Exception as e:
-        return False, str(e)
+        # Include the full command for debugging
+        cmd_str = shlex.join(cmd)
+        return False, f"{e}\n\nCommand: {cmd_str}"
 
 
 def _process_job(
@@ -299,7 +352,9 @@ def execute_plan(
     # - Otherwise, half of CPU cores for stream-copy operations (I/O bound)
     is_encoding_video = plan.jobs and plan.jobs[0].video_encoding.codec in (
         VideoCodec.H264,
-        VideoCodec.H264_AMF,
+        VideoCodec.H264_VAAPI,
+        VideoCodec.HEVC,
+        VideoCodec.HEVC_VAAPI,
     )
     if verbose or is_encoding_video:
         num_workers = 1
