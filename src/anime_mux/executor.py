@@ -100,6 +100,29 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
         cmd.extend(["-preset", "medium"])
         # Ensure output is compatible with most players
         cmd.extend(["-pix_fmt", "yuv420p"])
+    elif job.video_encoding.codec == VideoCodec.H264_AMF:
+        cmd.extend(["-c:v", "h264_amf"])
+
+        # Calculate QP based on first video track's metadata
+        if job.video_tracks:
+            video_track = job.video_tracks[0]
+            qp = job.video_encoding.calculate_qp(
+                width=video_track.width,
+                height=video_track.height,
+                bitrate=video_track.bitrate,
+            )
+        else:
+            # Fallback if no video track metadata
+            qp = job.video_encoding.qp if job.video_encoding.qp else 17
+
+        # Use constant QP mode with quality-enhancing options
+        cmd.extend(["-rc", "cqp"])
+        cmd.extend(["-qp_i", str(qp), "-qp_p", str(qp)])
+        cmd.extend(["-quality", "quality"])
+        # Enable quality enhancement features (only work in VBR modes, but set for future)
+        cmd.extend(["-preanalysis", "true"])
+        # Ensure output is compatible with most players
+        cmd.extend(["-pix_fmt", "yuv420p"])
 
     # Audio: copy or re-encode to AAC
     if transcode_audio:
@@ -272,10 +295,11 @@ def execute_plan(
 
     # Calculate number of workers
     # - 1 worker if verbose (to keep output readable)
-    # - 1 worker if video encoding (libx264 already uses multiple threads internally)
+    # - 1 worker if video encoding (encoder already uses multiple threads internally)
     # - Otherwise, half of CPU cores for stream-copy operations (I/O bound)
-    is_encoding_video = (
-        plan.jobs and plan.jobs[0].video_encoding.codec == VideoCodec.H264
+    is_encoding_video = plan.jobs and plan.jobs[0].video_encoding.codec in (
+        VideoCodec.H264,
+        VideoCodec.H264_AMF,
     )
     if verbose or is_encoding_video:
         num_workers = 1

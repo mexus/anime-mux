@@ -67,12 +67,17 @@ def main(
         "copy",
         "--video-codec",
         "-c",
-        help="Video codec: 'copy' (default) or 'h264' (re-encode to H.264)",
+        help="Video codec: 'copy' (default), 'h264' (libx264), or 'h264-amf' (AMD GPU)",
     ),
     crf: Optional[int] = typer.Option(
         None,
         "--crf",
-        help="CRF value for H.264 encoding (0-51, lower=better). Auto-calculated if not set.",
+        help="CRF value for libx264 encoding (0-51, lower=better). Auto-calculated if not set.",
+    ),
+    qp: Optional[int] = typer.Option(
+        None,
+        "--qp",
+        help="QP value for h264-amf encoding (0-51, lower=better). Auto-calculated if not set.",
     ),
     verbose: bool = typer.Option(
         False,
@@ -97,9 +102,10 @@ def main(
     """
     # Validate video codec
     video_codec_lower = video_codec.lower()
-    if video_codec_lower not in ("copy", "h264"):
+    if video_codec_lower not in ("copy", "h264", "h264-amf"):
         console.print(
-            f"[red]Error: Invalid video codec '{video_codec}'. Use 'copy' or 'h264'.[/red]"
+            f"[red]Error: Invalid video codec '{video_codec}'. "
+            "Use 'copy', 'h264', or 'h264-amf'.[/red]"
         )
         sys.exit(1)
 
@@ -112,6 +118,24 @@ def main(
             console.print(
                 "[yellow]Warning: --crf is ignored when --video-codec is 'copy'.[/yellow]"
             )
+        elif video_codec_lower == "h264-amf":
+            console.print(
+                "[yellow]Warning: --crf is for libx264. Use --qp for h264-amf.[/yellow]"
+            )
+
+    # Validate QP if provided
+    if qp is not None:
+        if not (0 <= qp <= 51):
+            console.print("[red]Error: QP must be between 0 and 51.[/red]")
+            sys.exit(1)
+        if video_codec_lower == "copy":
+            console.print(
+                "[yellow]Warning: --qp is ignored when --video-codec is 'copy'.[/yellow]"
+            )
+        elif video_codec_lower == "h264":
+            console.print(
+                "[yellow]Warning: --qp is for h264-amf. Use --crf for libx264.[/yellow]"
+            )
 
     try:
         _run(
@@ -122,6 +146,7 @@ def main(
             transcode_audio,
             video_codec_lower,
             crf,
+            qp,
             verbose,
         )
     except KeyboardInterrupt:
@@ -140,6 +165,7 @@ def _run(
     transcode_audio: bool,
     video_codec: str,
     crf: Optional[int],
+    qp: Optional[int],
     verbose: bool,
 ):
     """Main workflow."""
@@ -147,13 +173,21 @@ def _run(
     console.print("=" * 50)
 
     # Build video encoding config
-    codec_enum = VideoCodec.H264 if video_codec == "h264" else VideoCodec.COPY
-    video_encoding = VideoEncodingConfig(codec=codec_enum, crf=crf)
+    if video_codec == "h264":
+        codec_enum = VideoCodec.H264
+    elif video_codec == "h264-amf":
+        codec_enum = VideoCodec.H264_AMF
+    else:
+        codec_enum = VideoCodec.COPY
+    video_encoding = VideoEncodingConfig(codec=codec_enum, crf=crf, qp=qp)
 
     # Display encoding mode
     if video_encoding.codec == VideoCodec.H264:
         crf_msg = f"CRF {crf}" if crf else "auto CRF"
-        console.print(f"[blue]Video: H.264 encoding ({crf_msg})[/blue]")
+        console.print(f"[blue]Video: H.264 libx264 ({crf_msg})[/blue]")
+    elif video_encoding.codec == VideoCodec.H264_AMF:
+        qp_msg = f"QP {qp}" if qp else "auto QP"
+        console.print(f"[blue]Video: H.264 AMD AMF hardware ({qp_msg})[/blue]")
     else:
         console.print("[dim]Video: copy (no re-encoding)[/dim]")
 

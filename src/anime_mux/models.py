@@ -26,7 +26,8 @@ class VideoCodec(Enum):
     """Supported video codecs for re-encoding."""
 
     COPY = auto()  # Stream copy (no re-encoding)
-    H264 = auto()  # libx264
+    H264 = auto()  # libx264 (software)
+    H264_AMF = auto()  # h264_amf (AMD hardware)
 
 
 @dataclass
@@ -34,7 +35,8 @@ class VideoEncodingConfig:
     """Configuration for video encoding."""
 
     codec: VideoCodec = VideoCodec.COPY
-    crf: Optional[int] = None  # If None, auto-calculate based on source
+    crf: Optional[int] = None  # If None, auto-calculate based on source (for libx264)
+    qp: Optional[int] = None  # If None, auto-calculate based on source (for h264_amf)
 
     def calculate_crf(
         self, width: Optional[int], height: Optional[int], bitrate: Optional[int]
@@ -91,6 +93,59 @@ class VideoEncodingConfig:
 
         # Clamp to valid range
         return max(0, min(51, base_crf))
+
+    def calculate_qp(
+        self, width: Optional[int], height: Optional[int], bitrate: Optional[int]
+    ) -> int:
+        """
+        Calculate optimal QP for AMD AMF encoder based on resolution and bitrate.
+
+        QP (Quantization Parameter) is used by h264_amf instead of CRF.
+        The scale is similar (0-51, lower = better quality), but AMF's QP
+        tends to produce slightly lower quality than libx264's CRF at the
+        same value, so we use slightly lower (better) base values.
+
+        Base QP by resolution:
+        - 4K (2160p+): 15
+        - 1080p: 17
+        - 720p: 19
+        - 480p: 21
+        - Lower: 23
+        """
+        if self.qp is not None:
+            return self.qp
+
+        # Use defaults if dimensions unknown
+        h = height or 1080
+
+        # Base QP by resolution (slightly lower than CRF for similar quality)
+        if h >= 2160:
+            base_qp = 15
+            typical_bitrate = 20_000_000
+        elif h >= 1080:
+            base_qp = 17
+            typical_bitrate = 8_000_000
+        elif h >= 720:
+            base_qp = 19
+            typical_bitrate = 4_000_000
+        elif h >= 480:
+            base_qp = 21
+            typical_bitrate = 2_000_000
+        else:
+            base_qp = 23
+            typical_bitrate = 1_000_000
+
+        # Adjust based on source bitrate
+        if bitrate is not None and bitrate > 0:
+            ratio = bitrate / typical_bitrate
+            if ratio > 2.0:
+                base_qp -= 2
+            elif ratio > 1.5:
+                base_qp -= 1
+            elif ratio < 0.5:
+                base_qp += 1
+
+        return max(0, min(51, base_qp))
 
 
 @dataclass
