@@ -1,30 +1,54 @@
 # Technical Notes
 
-## H.264 Re-encoding with Auto CRF
+## Video Re-encoding Quality
 
-When using `--video-codec h264`, CRF is automatically calculated based on source resolution and bitrate.
+CRF (for CPU encoders) and quality (for VA-API) are automatically calculated based on source resolution, bitrate, and codec.
 
-### Base CRF by Resolution
+### Base CRF by Resolution (H.264)
 
 | Resolution | Base CRF | Typical Bitrate |
 |------------|----------|-----------------|
-| 4K (2160p+)| 17       | 20 Mbps         |
-| 1080p      | 19       | 8 Mbps          |
-| 720p       | 21       | 4 Mbps          |
-| 480p       | 23       | 2 Mbps          |
-| Lower      | 25       | 1 Mbps          |
+| 4K (2160p+)| 18       | 20 Mbps         |
+| 1080p      | 20       | 8 Mbps          |
+| 720p       | 22       | 4 Mbps          |
+| 480p       | 24       | 2 Mbps          |
+| Lower      | 26       | 1 Mbps          |
+
+### HEVC CRF Offset
+
+HEVC is ~30-50% more efficient than H.264, so it achieves equivalent visual quality at higher CRF values. We add +5 to base CRF for HEVC codecs:
+
+| Resolution | H.264 CRF | HEVC CRF |
+|------------|-----------|----------|
+| 4K         | 18        | 23       |
+| 1080p      | 20        | 25       |
+| 720p       | 22        | 27       |
+| 480p       | 24        | 29       |
+| Lower      | 26        | 31       |
 
 ### Bitrate Adjustment
 
-The base CRF is adjusted based on source bitrate relative to typical values:
+The base value is adjusted based on source bitrate relative to typical values:
 
-- Source > 2× typical: CRF -= 2 (preserve quality of high-bitrate source)
-- Source > 1.5× typical: CRF -= 1
-- Source < 0.5× typical: CRF += 1 (source already low quality)
+- Source > 2× typical: value -= 2 (preserve quality of high-bitrate source)
+- Source > 1.5× typical: value -= 1
+- Source < 0.5× typical: value += 1 (source already low quality)
+
+### VA-API Quality Settings
+
+VA-API encoders use `-rc_mode CQP` with `-global_quality` instead of CRF. Base quality values are slightly higher than CRF (values 22-24 recommended for 1080p HD content):
+
+| Resolution | H.264 VA-API | HEVC VA-API |
+|------------|--------------|-------------|
+| 4K         | 20           | 25          |
+| 1080p      | 22           | 27          |
+| 720p       | 24           | 29          |
+| 480p       | 26           | 31          |
+| Lower      | 28           | 33          |
 
 ### Implementation
 
-See `VideoEncodingConfig.calculate_crf()` in `models.py`. The algorithm extracts resolution and bitrate from ffprobe during analysis (`probe.py`), then calculates CRF at encoding time.
+See `VideoEncodingConfig.calculate_crf()` and `VideoEncodingConfig.calculate_quality()` in `models.py`. The algorithm extracts resolution and bitrate from ffprobe during analysis (`probe.py`), then calculates quality at encoding time.
 
 ## FFmpeg Interleaving Bug Workaround
 

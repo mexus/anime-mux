@@ -55,7 +55,7 @@ anime-mux <directory>
 | `--transcode-audio` | `-t` | Re-encode audio to AAC 256k (default: copy as-is) |
 | `--video-codec CODEC` | `-c` | Video codec (see below) |
 | `--crf VALUE` | | CRF for CPU encoding (0-51, lower=better). Auto-calculated if not set. |
-| `--qp VALUE` | | QP for VA-API GPU encoding (0-51, lower=better). Auto-calculated if not set. |
+| `--quality VALUE` | | Quality for VA-API GPU encoding (0-51, lower=better). Auto-calculated if not set. |
 | `--verbose` | `-V` | Print ffmpeg commands before executing |
 | `--version` | `-v` | Show version and exit |
 
@@ -65,9 +65,9 @@ anime-mux <directory>
 |-------|-------------|----------------|
 | `copy` | Stream copy, no re-encoding (default) | — |
 | `h264` | H.264 CPU encoding (libx264) | `--crf` |
-| `h264-vaapi` | H.264 GPU encoding via VA-API (AMD/Intel) | `--qp` |
+| `h264-vaapi` | H.264 GPU encoding via VA-API (AMD/Intel) | `--quality` |
 | `hevc` | HEVC/H.265 CPU encoding (libx265) | `--crf` |
-| `hevc-vaapi` | HEVC/H.265 GPU encoding via VA-API (AMD/Intel) | `--qp` |
+| `hevc-vaapi` | HEVC/H.265 GPU encoding via VA-API (AMD/Intel) | `--quality` |
 
 **Note:** VA-API codecs use hardware acceleration and are significantly faster than CPU encoding. They require a compatible GPU and Linux with VA-API support.
 

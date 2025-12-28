@@ -38,20 +38,26 @@ class VideoEncodingConfig:
 
     codec: VideoCodec = VideoCodec.COPY
     crf: Optional[int] = None  # If None, auto-calculate based on source (for libx264)
-    qp: Optional[int] = None  # If None, auto-calculate based on source (for h264_amf)
+    quality: Optional[int] = None  # If None, auto-calculate based on source (for VA-API)
 
     def calculate_crf(
-        self, width: Optional[int], height: Optional[int], bitrate: Optional[int]
+        self,
+        width: Optional[int],
+        height: Optional[int],
+        bitrate: Optional[int],
+        codec: "VideoCodec",
     ) -> int:
         """
-        Calculate optimal CRF based on resolution and bitrate.
+        Calculate optimal CRF based on resolution, bitrate, and codec.
 
-        Base CRF by resolution:
-        - 4K (2160p+): 17
-        - 1080p: 19
-        - 720p: 21
-        - 480p: 23
-        - Lower: 25
+        Base CRF by resolution (for H.264):
+        - 4K (2160p+): 18
+        - 1080p: 20
+        - 720p: 22
+        - 480p: 24
+        - Lower: 26
+
+        HEVC uses +5 offset (it's more efficient, so higher CRF = same quality).
 
         Bitrate adjustment:
         - If source bitrate is significantly higher than typical for resolution,
@@ -65,19 +71,19 @@ class VideoEncodingConfig:
 
         # Base CRF by resolution (using height as primary indicator)
         if h >= 2160:
-            base_crf = 17
+            base_crf = 18
             typical_bitrate = 20_000_000  # 20 Mbps typical for 4K anime
         elif h >= 1080:
-            base_crf = 19
+            base_crf = 20
             typical_bitrate = 8_000_000  # 8 Mbps typical for 1080p anime
         elif h >= 720:
-            base_crf = 21
+            base_crf = 22
             typical_bitrate = 4_000_000  # 4 Mbps typical for 720p anime
         elif h >= 480:
-            base_crf = 23
+            base_crf = 24
             typical_bitrate = 2_000_000  # 2 Mbps typical for 480p
         else:
-            base_crf = 25
+            base_crf = 26
             typical_bitrate = 1_000_000  # 1 Mbps for lower res
 
         # Adjust based on source bitrate
@@ -93,61 +99,74 @@ class VideoEncodingConfig:
                 # Low bitrate source - don't need to preserve as much
                 base_crf += 1
 
+        # HEVC is ~30-50% more efficient than H.264, so we can use higher CRF
+        # for equivalent quality. +5 is a conservative offset.
+        if codec in (VideoCodec.HEVC, VideoCodec.HEVC_VAAPI):
+            base_crf += 5
+
         # Clamp to valid range
         return max(0, min(51, base_crf))
 
-    def calculate_qp(
-        self, width: Optional[int], height: Optional[int], bitrate: Optional[int]
+    def calculate_quality(
+        self,
+        width: Optional[int],
+        height: Optional[int],
+        bitrate: Optional[int],
+        codec: "VideoCodec",
     ) -> int:
         """
-        Calculate optimal QP for VA-API encoder based on resolution and bitrate.
+        Calculate optimal global_quality for VA-API encoder based on resolution and bitrate.
 
-        QP (Quantization Parameter) is used by h264_vaapi instead of CRF.
-        The scale is similar (0-51, lower = better quality), but hardware
-        encoders tend to produce slightly lower quality than libx264's CRF
-        at the same value, so we use slightly lower (better) base values.
+        Used with -rc_mode CQP and -global_quality for VA-API encoders.
+        Values 22-24 are recommended for 1080p HD content based on practical testing.
 
-        Base QP by resolution:
-        - 4K (2160p+): 15
-        - 1080p: 17
-        - 720p: 19
-        - 480p: 21
-        - Lower: 23
+        Base quality by resolution (for H.264 VA-API):
+        - 4K (2160p+): 20
+        - 1080p: 22
+        - 720p: 24
+        - 480p: 26
+        - Lower: 28
+
+        HEVC uses +5 offset (it's more efficient, so higher value = same quality).
         """
-        if self.qp is not None:
-            return self.qp
+        if self.quality is not None:
+            return self.quality
 
         # Use defaults if dimensions unknown
         h = height or 1080
 
-        # Base QP by resolution (slightly lower than CRF for similar quality)
+        # Base quality by resolution
         if h >= 2160:
-            base_qp = 15
+            base_quality = 20
             typical_bitrate = 20_000_000
         elif h >= 1080:
-            base_qp = 17
+            base_quality = 22
             typical_bitrate = 8_000_000
         elif h >= 720:
-            base_qp = 19
+            base_quality = 24
             typical_bitrate = 4_000_000
         elif h >= 480:
-            base_qp = 21
+            base_quality = 26
             typical_bitrate = 2_000_000
         else:
-            base_qp = 23
+            base_quality = 28
             typical_bitrate = 1_000_000
 
         # Adjust based on source bitrate
         if bitrate is not None and bitrate > 0:
             ratio = bitrate / typical_bitrate
             if ratio > 2.0:
-                base_qp -= 2
+                base_quality -= 2
             elif ratio > 1.5:
-                base_qp -= 1
+                base_quality -= 1
             elif ratio < 0.5:
-                base_qp += 1
+                base_quality += 1
 
-        return max(0, min(51, base_qp))
+        # HEVC is more efficient, use higher quality value for same visual quality
+        if codec in (VideoCodec.HEVC, VideoCodec.HEVC_VAAPI):
+            base_quality += 5
+
+        return max(0, min(51, base_quality))
 
 
 @dataclass

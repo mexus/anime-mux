@@ -74,10 +74,10 @@ def main(
         "--crf",
         help="CRF value for h264/hevc CPU encoding (0-51, lower=better). Auto-calculated if not set.",
     ),
-    qp: Optional[int] = typer.Option(
+    quality: Optional[int] = typer.Option(
         None,
-        "--qp",
-        help="QP value for VA-API GPU encoding (0-51, lower=better). Auto-calculated if not set.",
+        "--quality",
+        help="Quality value for VA-API GPU encoding (0-51, lower=better). Auto-calculated if not set.",
     ),
     verbose: bool = typer.Option(
         False,
@@ -121,21 +121,21 @@ def main(
             )
         elif video_codec_lower in ("h264-vaapi", "hevc-vaapi"):
             console.print(
-                "[yellow]Warning: --crf is for CPU encoding. Use --qp for VA-API.[/yellow]"
+                "[yellow]Warning: --crf is for CPU encoding. Use --quality for VA-API.[/yellow]"
             )
 
-    # Validate QP if provided
-    if qp is not None:
-        if not (0 <= qp <= 51):
-            console.print("[red]Error: QP must be between 0 and 51.[/red]")
+    # Validate quality if provided
+    if quality is not None:
+        if not (0 <= quality <= 51):
+            console.print("[red]Error: --quality must be between 0 and 51.[/red]")
             sys.exit(1)
         if video_codec_lower == "copy":
             console.print(
-                "[yellow]Warning: --qp is ignored when --video-codec is 'copy'.[/yellow]"
+                "[yellow]Warning: --quality is ignored when --video-codec is 'copy'.[/yellow]"
             )
         elif video_codec_lower in ("h264", "hevc"):
             console.print(
-                "[yellow]Warning: --qp is for VA-API. Use --crf for CPU encoding.[/yellow]"
+                "[yellow]Warning: --quality is for VA-API. Use --crf for CPU encoding.[/yellow]"
             )
 
     try:
@@ -147,7 +147,7 @@ def main(
             transcode_audio,
             video_codec_lower,
             crf,
-            qp,
+            quality,
             verbose,
         )
     except KeyboardInterrupt:
@@ -166,7 +166,7 @@ def _run(
     transcode_audio: bool,
     video_codec: str,
     crf: Optional[int],
-    qp: Optional[int],
+    quality: Optional[int],
     verbose: bool,
 ):
     """Main workflow."""
@@ -181,21 +181,21 @@ def _run(
         "hevc-vaapi": VideoCodec.HEVC_VAAPI,
     }
     codec_enum = codec_map.get(video_codec, VideoCodec.COPY)
-    video_encoding = VideoEncodingConfig(codec=codec_enum, crf=crf, qp=qp)
+    video_encoding = VideoEncodingConfig(codec=codec_enum, crf=crf, quality=quality)
 
     # Display encoding mode
     if video_encoding.codec == VideoCodec.H264:
         crf_msg = f"CRF {crf}" if crf else "auto CRF"
         console.print(f"[blue]Video: H.264 libx264 ({crf_msg})[/blue]")
     elif video_encoding.codec == VideoCodec.H264_VAAPI:
-        qp_msg = f"QP {qp}" if qp else "auto QP"
-        console.print(f"[blue]Video: H.264 VA-API hardware ({qp_msg})[/blue]")
+        quality_msg = f"quality {quality}" if quality else "auto quality"
+        console.print(f"[blue]Video: H.264 VA-API hardware ({quality_msg})[/blue]")
     elif video_encoding.codec == VideoCodec.HEVC:
         crf_msg = f"CRF {crf}" if crf else "auto CRF"
         console.print(f"[blue]Video: HEVC libx265 ({crf_msg})[/blue]")
     elif video_encoding.codec == VideoCodec.HEVC_VAAPI:
-        qp_msg = f"QP {qp}" if qp else "auto QP"
-        console.print(f"[blue]Video: HEVC VA-API hardware ({qp_msg})[/blue]")
+        quality_msg = f"quality {quality}" if quality else "auto quality"
+        console.print(f"[blue]Video: HEVC VA-API hardware ({quality_msg})[/blue]")
     else:
         console.print("[dim]Video: copy (no re-encoding)[/dim]")
 

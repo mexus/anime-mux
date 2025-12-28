@@ -514,7 +514,7 @@ class TestH264Encoding:
         cmd = build_ffmpeg_command(job)
 
         idx_crf = cmd.index("-crf")
-        assert cmd[idx_crf + 1] == "19"  # base CRF for 1080p
+        assert cmd[idx_crf + 1] == "20"  # base CRF for 1080p
 
     def test_h264_encoding_preset_medium(self):
         """H.264 encoding uses medium preset."""
@@ -606,82 +606,282 @@ class TestVideoEncodingConfig:
     def test_explicit_crf_returned(self):
         """Explicit CRF value is returned without calculation."""
         config = VideoEncodingConfig(codec=VideoCodec.H264, crf=18)
-        assert config.calculate_crf(1920, 1080, 10_000_000) == 18
+        assert config.calculate_crf(1920, 1080, 10_000_000, VideoCodec.H264) == 18
 
     def test_4k_base_crf(self):
-        """4K resolution uses CRF 17."""
+        """4K resolution uses CRF 18 for H.264."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
-        crf = config.calculate_crf(3840, 2160, None)
-        assert crf == 17
+        crf = config.calculate_crf(3840, 2160, None, VideoCodec.H264)
+        assert crf == 18
 
     def test_1080p_base_crf(self):
-        """1080p resolution uses CRF 19."""
+        """1080p resolution uses CRF 20 for H.264."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
-        crf = config.calculate_crf(1920, 1080, None)
-        assert crf == 19
+        crf = config.calculate_crf(1920, 1080, None, VideoCodec.H264)
+        assert crf == 20
 
     def test_720p_base_crf(self):
-        """720p resolution uses CRF 21."""
+        """720p resolution uses CRF 22 for H.264."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
-        crf = config.calculate_crf(1280, 720, None)
-        assert crf == 21
+        crf = config.calculate_crf(1280, 720, None, VideoCodec.H264)
+        assert crf == 22
 
     def test_480p_base_crf(self):
-        """480p resolution uses CRF 23."""
+        """480p resolution uses CRF 24 for H.264."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
-        crf = config.calculate_crf(854, 480, None)
-        assert crf == 23
+        crf = config.calculate_crf(854, 480, None, VideoCodec.H264)
+        assert crf == 24
 
     def test_low_res_base_crf(self):
-        """Low resolution (<480p) uses CRF 25."""
+        """Low resolution (<480p) uses CRF 26 for H.264."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
-        crf = config.calculate_crf(640, 360, None)
-        assert crf == 25
+        crf = config.calculate_crf(640, 360, None, VideoCodec.H264)
+        assert crf == 26
 
     def test_high_bitrate_lowers_crf(self):
         """Very high bitrate source lowers CRF by 2."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
         # 1080p with very high bitrate (20 Mbps = 2.5x typical 8 Mbps)
-        crf = config.calculate_crf(1920, 1080, 20_000_000)
-        assert crf == 17  # base 19 - 2
+        crf = config.calculate_crf(1920, 1080, 20_000_000, VideoCodec.H264)
+        assert crf == 18  # base 20 - 2
 
     def test_moderately_high_bitrate_lowers_crf(self):
         """Moderately high bitrate source lowers CRF by 1."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
         # 1080p with high bitrate (13 Mbps = 1.6x typical)
-        crf = config.calculate_crf(1920, 1080, 13_000_000)
-        assert crf == 18  # base 19 - 1
+        crf = config.calculate_crf(1920, 1080, 13_000_000, VideoCodec.H264)
+        assert crf == 19  # base 20 - 1
 
     def test_low_bitrate_raises_crf(self):
         """Low bitrate source raises CRF by 1."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
         # 1080p with low bitrate (3 Mbps = 0.375x typical)
-        crf = config.calculate_crf(1920, 1080, 3_000_000)
-        assert crf == 20  # base 19 + 1
+        crf = config.calculate_crf(1920, 1080, 3_000_000, VideoCodec.H264)
+        assert crf == 21  # base 20 + 1
 
     def test_typical_bitrate_uses_base_crf(self):
         """Typical bitrate uses base CRF unchanged."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
         # 1080p with typical bitrate (8 Mbps)
-        crf = config.calculate_crf(1920, 1080, 8_000_000)
-        assert crf == 19  # base, no adjustment
+        crf = config.calculate_crf(1920, 1080, 8_000_000, VideoCodec.H264)
+        assert crf == 20  # base, no adjustment
 
     def test_crf_clamped_minimum(self):
         """CRF is clamped to minimum 0."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
         # 4K with extremely high bitrate
-        crf = config.calculate_crf(3840, 2160, 100_000_000)
+        crf = config.calculate_crf(3840, 2160, 100_000_000, VideoCodec.H264)
         assert crf >= 0
 
     def test_crf_clamped_maximum(self):
         """CRF is clamped to maximum 51."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
         # Very low res with very low bitrate
-        crf = config.calculate_crf(320, 240, 100_000)
+        crf = config.calculate_crf(320, 240, 100_000, VideoCodec.H264)
         assert crf <= 51
 
     def test_none_dimensions_uses_defaults(self):
         """None dimensions use 1080p defaults."""
         config = VideoEncodingConfig(codec=VideoCodec.H264)
-        crf = config.calculate_crf(None, None, None)
-        assert crf == 19  # 1080p default
+        crf = config.calculate_crf(None, None, None, VideoCodec.H264)
+        assert crf == 20  # 1080p default
+
+    def test_hevc_uses_higher_crf(self):
+        """HEVC uses +5 CRF offset for equivalent quality."""
+        config = VideoEncodingConfig(codec=VideoCodec.HEVC)
+        # 1080p H.264 would be 20, HEVC should be 25
+        crf = config.calculate_crf(1920, 1080, None, VideoCodec.HEVC)
+        assert crf == 25  # base 20 + 5
+
+    def test_hevc_vaapi_uses_higher_crf(self):
+        """HEVC VA-API also uses +5 CRF offset."""
+        config = VideoEncodingConfig(codec=VideoCodec.HEVC_VAAPI)
+        crf = config.calculate_crf(1920, 1080, None, VideoCodec.HEVC_VAAPI)
+        assert crf == 25  # base 20 + 5
+
+
+class TestVideoEncodingConfigQuality:
+    """Tests for VideoEncodingConfig quality calculation (VA-API)."""
+
+    def test_explicit_quality_returned(self):
+        """Explicit quality value is returned without calculation."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264_VAAPI, quality=20)
+        assert config.calculate_quality(1920, 1080, 10_000_000, VideoCodec.H264_VAAPI) == 20
+
+    def test_1080p_base_quality_h264_vaapi(self):
+        """1080p H.264 VA-API uses quality 22."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264_VAAPI)
+        quality = config.calculate_quality(1920, 1080, None, VideoCodec.H264_VAAPI)
+        assert quality == 22
+
+    def test_1080p_base_quality_hevc_vaapi(self):
+        """1080p HEVC VA-API uses quality 27 (22 + 5)."""
+        config = VideoEncodingConfig(codec=VideoCodec.HEVC_VAAPI)
+        quality = config.calculate_quality(1920, 1080, None, VideoCodec.HEVC_VAAPI)
+        assert quality == 27  # base 22 + 5 for HEVC
+
+    def test_4k_base_quality(self):
+        """4K H.264 VA-API uses quality 20."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264_VAAPI)
+        quality = config.calculate_quality(3840, 2160, None, VideoCodec.H264_VAAPI)
+        assert quality == 20
+
+    def test_720p_base_quality(self):
+        """720p H.264 VA-API uses quality 24."""
+        config = VideoEncodingConfig(codec=VideoCodec.H264_VAAPI)
+        quality = config.calculate_quality(1280, 720, None, VideoCodec.H264_VAAPI)
+        assert quality == 24
+
+
+class TestVaapiEncoding:
+    """Tests for VA-API video encoding in build_ffmpeg_command."""
+
+    def test_h264_vaapi_uses_cqp_mode(self):
+        """H.264 VA-API uses -rc_mode CQP."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        video_track = make_video_track(video_file, index=0)
+        video_track.width = 1920
+        video_track.height = 1080
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[video_track],
+            audio_tracks=[make_audio_track(video_file, index=1)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.H264_VAAPI),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        assert "-rc_mode" in cmd
+        idx_rc = cmd.index("-rc_mode")
+        assert cmd[idx_rc + 1] == "CQP"
+
+    def test_h264_vaapi_uses_global_quality(self):
+        """H.264 VA-API uses -global_quality instead of -qp."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        video_track = make_video_track(video_file, index=0)
+        video_track.width = 1920
+        video_track.height = 1080
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[video_track],
+            audio_tracks=[make_audio_track(video_file, index=1)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.H264_VAAPI),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        assert "-global_quality" in cmd
+        assert "-qp" not in cmd
+        idx_gq = cmd.index("-global_quality")
+        assert cmd[idx_gq + 1] == "22"  # 1080p base quality
+
+    def test_hevc_vaapi_uses_cqp_mode(self):
+        """HEVC VA-API uses -rc_mode CQP."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        video_track = make_video_track(video_file, index=0)
+        video_track.width = 1920
+        video_track.height = 1080
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[video_track],
+            audio_tracks=[make_audio_track(video_file, index=1)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.HEVC_VAAPI),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        assert "-rc_mode" in cmd
+        idx_rc = cmd.index("-rc_mode")
+        assert cmd[idx_rc + 1] == "CQP"
+
+    def test_hevc_vaapi_uses_higher_quality_value(self):
+        """HEVC VA-API uses quality 27 for 1080p (22 + 5 HEVC offset)."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        video_track = make_video_track(video_file, index=0)
+        video_track.width = 1920
+        video_track.height = 1080
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[video_track],
+            audio_tracks=[make_audio_track(video_file, index=1)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.HEVC_VAAPI),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_gq = cmd.index("-global_quality")
+        assert cmd[idx_gq + 1] == "27"  # 1080p base 22 + 5 for HEVC
+
+    def test_vaapi_explicit_quality(self):
+        """Explicit quality value is used in VA-API command."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[make_video_track(video_file)],
+            audio_tracks=[make_audio_track(video_file)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.H264_VAAPI, quality=18),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_gq = cmd.index("-global_quality")
+        assert cmd[idx_gq + 1] == "18"
+
+
+class TestHevcEncoding:
+    """Tests for HEVC software encoding."""
+
+    def test_hevc_uses_higher_crf(self):
+        """HEVC encoding uses CRF 25 for 1080p (20 + 5)."""
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+
+        video_track = make_video_track(video_file, index=0)
+        video_track.width = 1920
+        video_track.height = 1080
+
+        job = MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[video_track],
+            audio_tracks=[make_audio_track(video_file, index=1)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=VideoEncodingConfig(codec=VideoCodec.HEVC),
+        )
+
+        cmd = build_ffmpeg_command(job)
+
+        idx_cv = cmd.index("-c:v")
+        assert cmd[idx_cv + 1] == "libx265"
+        idx_crf = cmd.index("-crf")
+        assert cmd[idx_crf + 1] == "25"  # base 20 + 5 for HEVC

@@ -100,10 +100,11 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
                 width=video_track.width,
                 height=video_track.height,
                 bitrate=video_track.bitrate,
+                codec=job.video_encoding.codec,
             )
         else:
             # Fallback if no video track metadata
-            crf = job.video_encoding.crf if job.video_encoding.crf else 19
+            crf = job.video_encoding.crf if job.video_encoding.crf else 20
 
         cmd.extend(["-crf", str(crf)])
         cmd.extend(["-preset", "medium"])
@@ -114,20 +115,22 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
         # With -hwaccel_output_format vaapi, frames are already on GPU
         # No filter needed - frames go directly from decoder to encoder
         cmd.extend(["-c:v", "h264_vaapi"])
+        cmd.extend(["-rc_mode", "CQP"])
 
-        # Calculate QP based on first video track's metadata
+        # Calculate quality based on first video track's metadata
         if job.video_tracks:
             video_track = job.video_tracks[0]
-            qp = job.video_encoding.calculate_qp(
+            quality = job.video_encoding.calculate_quality(
                 width=video_track.width,
                 height=video_track.height,
                 bitrate=video_track.bitrate,
+                codec=job.video_encoding.codec,
             )
         else:
             # Fallback if no video track metadata
-            qp = job.video_encoding.qp if job.video_encoding.qp else 17
+            quality = job.video_encoding.quality if job.video_encoding.quality else 22
 
-        cmd.extend(["-qp", str(qp)])
+        cmd.extend(["-global_quality", str(quality)])
         # Disable B-frames for better AMD compatibility
         cmd.extend(["-bf", "0"])
     elif job.video_encoding.codec == VideoCodec.HEVC:
@@ -140,10 +143,11 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
                 width=video_track.width,
                 height=video_track.height,
                 bitrate=video_track.bitrate,
+                codec=job.video_encoding.codec,
             )
         else:
-            # Fallback if no video track metadata
-            crf = job.video_encoding.crf if job.video_encoding.crf else 19
+            # Fallback if no video track metadata (25 = base 20 + 5 for HEVC)
+            crf = job.video_encoding.crf if job.video_encoding.crf else 25
 
         cmd.extend(["-crf", str(crf)])
         cmd.extend(["-preset", "medium"])
@@ -154,20 +158,22 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
         # With -hwaccel_output_format vaapi, frames are already on GPU
         # No filter needed - frames go directly from decoder to encoder
         cmd.extend(["-c:v", "hevc_vaapi"])
+        cmd.extend(["-rc_mode", "CQP"])
 
-        # Calculate QP based on first video track's metadata
+        # Calculate quality based on first video track's metadata
         if job.video_tracks:
             video_track = job.video_tracks[0]
-            qp = job.video_encoding.calculate_qp(
+            quality = job.video_encoding.calculate_quality(
                 width=video_track.width,
                 height=video_track.height,
                 bitrate=video_track.bitrate,
+                codec=job.video_encoding.codec,
             )
         else:
-            # Fallback if no video track metadata
-            qp = job.video_encoding.qp if job.video_encoding.qp else 17
+            # Fallback if no video track metadata (27 = base 22 + 5 for HEVC)
+            quality = job.video_encoding.quality if job.video_encoding.quality else 27
 
-        cmd.extend(["-qp", str(qp)])
+        cmd.extend(["-global_quality", str(quality)])
 
     # Audio: copy or re-encode to AAC
     if transcode_audio:
