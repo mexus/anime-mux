@@ -36,7 +36,10 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
     cmd = ["ffmpeg", "-y"]
 
     # For VA-API, we need to specify the device and enable hardware decoding
-    is_vaapi = job.video_encoding.codec in (VideoCodec.H264_VAAPI, VideoCodec.HEVC_VAAPI)
+    is_vaapi = job.video_encoding.codec in (
+        VideoCodec.H264_VAAPI,
+        VideoCodec.HEVC_VAAPI,
+    )
     if is_vaapi:
         # Enable hardware decoding - keeps frames on GPU, avoiding CPU-GPU transfers
         cmd.extend(["-hwaccel", "vaapi"])

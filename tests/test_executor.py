@@ -706,7 +706,10 @@ class TestVideoEncodingConfigQuality:
     def test_explicit_quality_returned(self):
         """Explicit quality value is returned without calculation."""
         config = VideoEncodingConfig(codec=VideoCodec.H264_VAAPI, quality=20)
-        assert config.calculate_quality(1920, 1080, 10_000_000, VideoCodec.H264_VAAPI) == 20
+        assert (
+            config.calculate_quality(1920, 1080, 10_000_000, VideoCodec.H264_VAAPI)
+            == 20
+        )
 
     def test_1080p_base_quality_h264_vaapi(self):
         """1080p H.264 VA-API uses quality 22."""

@@ -38,7 +38,9 @@ class VideoEncodingConfig:
 
     codec: VideoCodec = VideoCodec.COPY
     crf: Optional[int] = None  # If None, auto-calculate based on source (for libx264)
-    quality: Optional[int] = None  # If None, auto-calculate based on source (for VA-API)
+    quality: Optional[int] = (
+        None  # If None, auto-calculate based on source (for VA-API)
+    )
 
     def calculate_crf(
         self,
