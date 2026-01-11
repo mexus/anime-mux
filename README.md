@@ -166,6 +166,7 @@ Reverse order matters because episode numbers typically appear after static numb
 - `Series.S01E05.mkv`
 - `series_ep_12.mkv`
 - `01.ass`
+- `[Group] Series OVA (BD).mkv`, `[Group] Series OVA2 (BD).mkv` (OVA/SP/OAD with optional number)
 
 #### Track Identity Matching
 

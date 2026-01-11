@@ -138,3 +138,42 @@ class TestExtractEpisodeNumbers:
         ]
         result = extract_episode_numbers(files)
         assert result == {1: files[0], 2: files[1], 3: files[2]}
+
+    def test_ova_pattern_with_optional_number(self):
+        """OVA pattern where first episode has no number."""
+        files = [
+            Path(
+                "/media/[UCCUSS] Wotaku ni Koi wa Muzukashii OVA "
+                "(BD 1920x1080p AVC FLAC).mkv"
+            ),
+            Path(
+                "/media/[UCCUSS] Wotaku ni Koi wa Muzukashii OVA2 "
+                "(BD 1920x1080p AVC FLAC).mkv"
+            ),
+            Path(
+                "/media/[UCCUSS] Wotaku ni Koi wa Muzukashii OVA3 "
+                "(BD 1920x1080p AVC FLAC).mkv"
+            ),
+        ]
+        result = extract_episode_numbers(files)
+        assert result == {1: files[0], 2: files[1], 3: files[2]}
+
+    def test_sp_pattern(self):
+        """SP (special) pattern with optional number."""
+        files = [
+            Path("/media/Series SP.mkv"),
+            Path("/media/Series SP2.mkv"),
+            Path("/media/Series SP3.mkv"),
+        ]
+        result = extract_episode_numbers(files)
+        assert result == {1: files[0], 2: files[1], 3: files[2]}
+
+    def test_ova_pattern_all_numbered(self):
+        """OVA pattern where all episodes have numbers."""
+        files = [
+            Path("/media/Series OVA1.mkv"),
+            Path("/media/Series OVA2.mkv"),
+            Path("/media/Series OVA3.mkv"),
+        ]
+        result = extract_episode_numbers(files)
+        assert result == {1: files[0], 2: files[1], 3: files[2]}

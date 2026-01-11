@@ -3,6 +3,65 @@
 import re
 from pathlib import Path
 
+# Patterns for special episode markers (OVA, SP, etc.) with optional number suffix
+# The number is optional - missing number implies episode 1
+SPECIAL_EPISODE_PREFIXES = ["OVA", "OAD", "SP", "Special", "Extra", "Bonus", "Movie"]
+
+
+def _try_prefixed_pattern(files: list[Path]) -> dict[int, Path]:
+    """
+    Try to match prefixed episode patterns like OVA, OVA2, OVA3.
+
+    These patterns have an alphabetic prefix followed by an optional number,
+    where missing number implies episode 1.
+    """
+    for prefix in SPECIAL_EPISODE_PREFIXES:
+        # Pattern: prefix followed by optional digits, case-insensitive
+        # The prefix must be a word boundary (not part of a larger word)
+        prefix_pattern = re.compile(
+            rf"(?<![a-zA-Z])({re.escape(prefix)})(\d*)(?![a-zA-Z\d])",
+            re.IGNORECASE,
+        )
+
+        # Find the prefix in first file to establish template
+        template_name = files[0].name
+        matches = list(prefix_pattern.finditer(template_name))
+
+        for match in matches:
+            # Build pattern with everything before and after the prefix+number
+            before = template_name[: match.start()]
+            after = template_name[match.end() :]
+
+            # Create pattern: literal prefix + captured optional number
+            pattern_str = (
+                f"^{re.escape(before)}"
+                f"(?:{re.escape(prefix)})(\\d*)"
+                f"{re.escape(after)}$"
+            )
+            pattern = re.compile(pattern_str, re.IGNORECASE)
+
+            episode_map: dict[int, Path] = {}
+            is_valid = True
+
+            for file_path in files:
+                file_match = pattern.match(file_path.name)
+                if file_match:
+                    num_str = file_match.group(1)
+                    # Empty string means episode 1, otherwise use the number
+                    episode_num = int(num_str) if num_str else 1
+                    if episode_num in episode_map:
+                        is_valid = False
+                        break
+                    episode_map[episode_num] = file_path
+                else:
+                    is_valid = False
+                    break
+
+            if is_valid and len(episode_map) == len(files):
+                return episode_map
+
+    return {}
+
 
 def extract_episode_numbers(files: list[Path]) -> dict[int, Path]:
     """
@@ -61,6 +120,11 @@ def extract_episode_numbers(files: list[Path]) -> dict[int, Path]:
         # and each file mapped to a unique episode number.
         if is_pattern_valid and len(episode_map) == len(files):
             return episode_map
+
+    # Try prefixed patterns (OVA, SP, etc.) as fallback
+    prefixed_result = _try_prefixed_pattern(files)
+    if prefixed_result:
+        return prefixed_result
 
     # No valid pattern found
     return {}
