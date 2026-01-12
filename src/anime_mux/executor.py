@@ -273,8 +273,7 @@ def run_ffmpeg_with_progress(
     # Progress timeout: time without progress updates before considering it hung
     # Use a percentage of video duration, with min/max bounds
     progress_timeout = max(
-        MIN_PROGRESS_TIMEOUT,
-        min(PROGRESS_TIMEOUT_SECONDS, duration_seconds * 0.5)
+        MIN_PROGRESS_TIMEOUT, min(PROGRESS_TIMEOUT_SECONDS, duration_seconds * 0.5)
     )
     # Maximum runtime: absolute limit based on video duration
     max_runtime = duration_seconds * MAX_RUNTIME_MULTIPLIER
@@ -323,7 +322,7 @@ def run_ffmpeg_with_progress(
                 except subprocess.TimeoutExpired:
                     process.kill()
                 return False, (
-                    f"Encoding exceeded maximum time of {max_runtime/3600:.1f} hours. "
+                    f"Encoding exceeded maximum time of {max_runtime / 3600:.1f} hours. "
                     f"This may indicate a problem with the source file or encoder."
                 )
 

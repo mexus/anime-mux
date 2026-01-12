@@ -66,13 +66,17 @@ class TestCLIValidation:
 
     def test_crf_warning_with_copy_codec(self, tmp_path):
         """Test warning when using CRF with copy codec."""
-        result = runner.invoke(app, [str(tmp_path), "--video-codec", "copy", "--crf", "20"])
+        result = runner.invoke(
+            app, [str(tmp_path), "--video-codec", "copy", "--crf", "20"]
+        )
         # Will fail at ffprobe, but warning should appear
         assert "ignored when --video-codec is 'copy'" in result.stdout
 
     def test_quality_warning_with_copy_codec(self, tmp_path):
         """Test warning when using quality with copy codec."""
-        result = runner.invoke(app, [str(tmp_path), "--video-codec", "copy", "--quality", "20"])
+        result = runner.invoke(
+            app, [str(tmp_path), "--video-codec", "copy", "--quality", "20"]
+        )
         # Will fail at ffprobe, but warning should appear
         assert "ignored when --video-codec is 'copy'" in result.stdout
 
@@ -86,7 +90,9 @@ class TestCLIValidation:
 
     def test_quality_warning_with_cpu_codec(self, tmp_path):
         """Test warning when using quality with CPU codec."""
-        result = runner.invoke(app, [str(tmp_path), "--video-codec", "h264", "--quality", "20"])
+        result = runner.invoke(
+            app, [str(tmp_path), "--video-codec", "h264", "--quality", "20"]
+        )
         # Will fail at ffprobe, but warning should appear
         assert "Use --crf for CPU encoding" in result.stdout
 
@@ -103,9 +109,7 @@ class TestCLIMisc:
     def test_log_file_option(self, tmp_path):
         """Test that --log-file option is recognized."""
         log_file = tmp_path / "test.log"
-        result = runner.invoke(
-            app, [str(tmp_path), "--log-file", str(log_file)]
-        )
+        result = runner.invoke(app, [str(tmp_path), "--log-file", str(log_file)])
         # Will fail at ffprobe, but option should be parsed
         assert "log-file" not in result.stdout  # No error about unknown option
 

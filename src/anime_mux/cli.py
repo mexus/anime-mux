@@ -130,7 +130,9 @@ def main(
     # Validate CRF if provided
     if crf is not None:
         if not (MIN_QUALITY_VALUE <= crf <= MAX_QUALITY_VALUE):
-            console.print(f"[red]Error: CRF must be between {MIN_QUALITY_VALUE} and {MAX_QUALITY_VALUE}.[/red]")
+            console.print(
+                f"[red]Error: CRF must be between {MIN_QUALITY_VALUE} and {MAX_QUALITY_VALUE}.[/red]"
+            )
             sys.exit(1)
         if video_codec_lower == "copy":
             console.print(
@@ -144,7 +146,9 @@ def main(
     # Validate quality if provided
     if quality is not None:
         if not (MIN_QUALITY_VALUE <= quality <= MAX_QUALITY_VALUE):
-            console.print(f"[red]Error: --quality must be between {MIN_QUALITY_VALUE} and {MAX_QUALITY_VALUE}.[/red]")
+            console.print(
+                f"[red]Error: --quality must be between {MIN_QUALITY_VALUE} and {MAX_QUALITY_VALUE}.[/red]"
+            )
             sys.exit(1)
         if video_codec_lower == "copy":
             console.print(
@@ -289,7 +293,10 @@ def _run(
         choice = inquirer.select(
             message="Continue anyway?",
             choices=[
-                {"name": f"Yes, continue ({format_bytes(remaining)} remaining)", "value": "y"},
+                {
+                    "name": f"Yes, continue ({format_bytes(remaining)} remaining)",
+                    "value": "y",
+                },
                 {"name": "No, abort", "value": "n"},
             ],
             default="n",

@@ -36,9 +36,7 @@ def _try_prefixed_pattern(files: list[Path]) -> dict[int, Path]:
 
             # Create pattern: literal prefix + captured optional number
             pattern_str = (
-                f"^{re.escape(before)}"
-                f"(?:{re.escape(prefix)})(\\d*)"
-                f"{re.escape(after)}$"
+                f"^{re.escape(before)}(?:{re.escape(prefix)})(\\d*){re.escape(after)}$"
             )
             pattern = re.compile(pattern_str, re.IGNORECASE)
 

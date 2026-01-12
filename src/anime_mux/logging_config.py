@@ -17,9 +17,7 @@ class AnimeMuxLogger:
         # Console handler (forward to stderr)
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(
-            logging.Formatter("%(levelname)s: %(message)s")
-        )
+        console_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
         self.logger.addHandler(console_handler)
 
         # File handler (detailed, with timestamps)

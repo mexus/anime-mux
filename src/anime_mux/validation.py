@@ -18,9 +18,7 @@ def estimate_output_size(plan: MergePlan) -> int:
     for job in plan.jobs:
         # Collect unique source files
         source_files = {job.episode.video_file}
-        for track in (
-            job.video_tracks + job.audio_tracks + job.subtitle_tracks
-        ):
+        for track in job.video_tracks + job.audio_tracks + job.subtitle_tracks:
             source_files.add(track.source_file)
 
         for file_path in source_files:
