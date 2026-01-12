@@ -5,6 +5,30 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
 
+from .constants import (
+    BASE_CRF_1080P,
+    BASE_CRF_4K,
+    BASE_CRF_480P,
+    BASE_CRF_720P,
+    BASE_CRF_LOWER,
+    BASE_QUALITY_1080P,
+    BASE_QUALITY_4K,
+    BASE_QUALITY_480P,
+    BASE_QUALITY_720P,
+    BASE_QUALITY_LOWER,
+    HEVC_CODEC_OFFSET,
+    HIGH_BITRATE_THRESHOLD,
+    LOW_BITRATE_THRESHOLD,
+    MAX_QUALITY_VALUE,
+    MEDIUM_BITRATE_THRESHOLD,
+    MIN_QUALITY_VALUE,
+    TYPICAL_BITRATE_1080P,
+    TYPICAL_BITRATE_4K,
+    TYPICAL_BITRATE_480P,
+    TYPICAL_BITRATE_720P,
+    TYPICAL_BITRATE_LOWER,
+)
+
 
 class TrackType(Enum):
     """Type of media track."""
@@ -73,41 +97,41 @@ class VideoEncodingConfig:
 
         # Base CRF by resolution (using height as primary indicator)
         if h >= 2160:
-            base_crf = 18
-            typical_bitrate = 20_000_000  # 20 Mbps typical for 4K anime
+            base_crf = BASE_CRF_4K
+            typical_bitrate = TYPICAL_BITRATE_4K
         elif h >= 1080:
-            base_crf = 20
-            typical_bitrate = 8_000_000  # 8 Mbps typical for 1080p anime
+            base_crf = BASE_CRF_1080P
+            typical_bitrate = TYPICAL_BITRATE_1080P
         elif h >= 720:
-            base_crf = 22
-            typical_bitrate = 4_000_000  # 4 Mbps typical for 720p anime
+            base_crf = BASE_CRF_720P
+            typical_bitrate = TYPICAL_BITRATE_720P
         elif h >= 480:
-            base_crf = 24
-            typical_bitrate = 2_000_000  # 2 Mbps typical for 480p
+            base_crf = BASE_CRF_480P
+            typical_bitrate = TYPICAL_BITRATE_480P
         else:
-            base_crf = 26
-            typical_bitrate = 1_000_000  # 1 Mbps for lower res
+            base_crf = BASE_CRF_LOWER
+            typical_bitrate = TYPICAL_BITRATE_LOWER
 
         # Adjust based on source bitrate
         if bitrate is not None and bitrate > 0:
             ratio = bitrate / typical_bitrate
-            if ratio > 2.0:
+            if ratio > HIGH_BITRATE_THRESHOLD:
                 # Very high bitrate source - preserve more quality
                 base_crf -= 2
-            elif ratio > 1.5:
+            elif ratio > MEDIUM_BITRATE_THRESHOLD:
                 # High bitrate source
                 base_crf -= 1
-            elif ratio < 0.5:
+            elif ratio < LOW_BITRATE_THRESHOLD:
                 # Low bitrate source - don't need to preserve as much
                 base_crf += 1
 
         # HEVC is ~30-50% more efficient than H.264, so we can use higher CRF
         # for equivalent quality. +5 is a conservative offset.
         if codec in (VideoCodec.HEVC, VideoCodec.HEVC_VAAPI):
-            base_crf += 5
+            base_crf += HEVC_CODEC_OFFSET
 
         # Clamp to valid range
-        return max(0, min(51, base_crf))
+        return max(MIN_QUALITY_VALUE, min(MAX_QUALITY_VALUE, base_crf))
 
     def calculate_quality(
         self,
@@ -139,36 +163,36 @@ class VideoEncodingConfig:
 
         # Base quality by resolution
         if h >= 2160:
-            base_quality = 20
-            typical_bitrate = 20_000_000
+            base_quality = BASE_QUALITY_4K
+            typical_bitrate = TYPICAL_BITRATE_4K
         elif h >= 1080:
-            base_quality = 22
-            typical_bitrate = 8_000_000
+            base_quality = BASE_QUALITY_1080P
+            typical_bitrate = TYPICAL_BITRATE_1080P
         elif h >= 720:
-            base_quality = 24
-            typical_bitrate = 4_000_000
+            base_quality = BASE_QUALITY_720P
+            typical_bitrate = TYPICAL_BITRATE_720P
         elif h >= 480:
-            base_quality = 26
-            typical_bitrate = 2_000_000
+            base_quality = BASE_QUALITY_480P
+            typical_bitrate = TYPICAL_BITRATE_480P
         else:
-            base_quality = 28
-            typical_bitrate = 1_000_000
+            base_quality = BASE_QUALITY_LOWER
+            typical_bitrate = TYPICAL_BITRATE_LOWER
 
         # Adjust based on source bitrate
         if bitrate is not None and bitrate > 0:
             ratio = bitrate / typical_bitrate
-            if ratio > 2.0:
+            if ratio > HIGH_BITRATE_THRESHOLD:
                 base_quality -= 2
-            elif ratio > 1.5:
+            elif ratio > MEDIUM_BITRATE_THRESHOLD:
                 base_quality -= 1
-            elif ratio < 0.5:
+            elif ratio < LOW_BITRATE_THRESHOLD:
                 base_quality += 1
 
         # HEVC is more efficient, use higher quality value for same visual quality
         if codec in (VideoCodec.HEVC, VideoCodec.HEVC_VAAPI):
-            base_quality += 5
+            base_quality += HEVC_CODEC_OFFSET
 
-        return max(0, min(51, base_quality))
+        return max(MIN_QUALITY_VALUE, min(MAX_QUALITY_VALUE, base_quality))
 
 
 @dataclass

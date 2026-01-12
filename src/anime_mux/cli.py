@@ -9,12 +9,24 @@ from InquirerPy import inquirer
 
 from . import __version__
 from .analyzer import analyze_series
+from .constants import (
+    DISK_SPACE_WARNING_THRESHOLD,
+    MAX_QUALITY_VALUE,
+    MIN_QUALITY_VALUE,
+    VALID_VIDEO_CODECS,
+)
 from .executor import check_existing_outputs, execute_plan
+from .logging_config import get_logger, init_logger
 from .models import VideoCodec, VideoEncodingConfig
 from .planner import build_merge_plan, display_merge_plan
-from .probe import check_ffprobe
+from .probe import FFprobeNotFoundError, check_ffprobe
 from .selector import AbortError, display_analysis, select_tracks
 from .utils import console
+from .validation import (
+    check_disk_space,
+    format_bytes,
+    validate_output_directory,
+)
 
 app = typer.Typer(
     name="anime-mux",
@@ -85,6 +97,12 @@ def main(
         "-V",
         help="Print ffmpeg commands before executing",
     ),
+    log_file: Optional[Path] = typer.Option(
+        None,
+        "--log-file",
+        "-l",
+        help="Write debug logs to file",
+    ),
     version: bool = typer.Option(
         None,
         "--version",
@@ -102,18 +120,17 @@ def main(
     """
     # Validate video codec
     video_codec_lower = video_codec.lower()
-    valid_codecs = ("copy", "h264", "h264-vaapi", "hevc", "hevc-vaapi")
-    if video_codec_lower not in valid_codecs:
+    if video_codec_lower not in VALID_VIDEO_CODECS:
         console.print(
             f"[red]Error: Invalid video codec '{video_codec}'. "
-            f"Use one of: {', '.join(valid_codecs)}[/red]"
+            f"Use one of: {', '.join(VALID_VIDEO_CODECS)}[/red]"
         )
         sys.exit(1)
 
     # Validate CRF if provided
     if crf is not None:
-        if not (0 <= crf <= 51):
-            console.print("[red]Error: CRF must be between 0 and 51.[/red]")
+        if not (MIN_QUALITY_VALUE <= crf <= MAX_QUALITY_VALUE):
+            console.print(f"[red]Error: CRF must be between {MIN_QUALITY_VALUE} and {MAX_QUALITY_VALUE}.[/red]")
             sys.exit(1)
         if video_codec_lower == "copy":
             console.print(
@@ -126,8 +143,8 @@ def main(
 
     # Validate quality if provided
     if quality is not None:
-        if not (0 <= quality <= 51):
-            console.print("[red]Error: --quality must be between 0 and 51.[/red]")
+        if not (MIN_QUALITY_VALUE <= quality <= MAX_QUALITY_VALUE):
+            console.print(f"[red]Error: --quality must be between {MIN_QUALITY_VALUE} and {MAX_QUALITY_VALUE}.[/red]")
             sys.exit(1)
         if video_codec_lower == "copy":
             console.print(
@@ -149,12 +166,16 @@ def main(
             crf,
             quality,
             verbose,
+            log_file,
         )
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user.[/yellow]")
         sys.exit(1)
     except AbortError as e:
         console.print(f"\n[yellow]{e}[/yellow]")
+        sys.exit(1)
+    except FFprobeNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
         sys.exit(1)
 
 
@@ -168,10 +189,17 @@ def _run(
     crf: Optional[int],
     quality: Optional[int],
     verbose: bool,
+    log_file: Optional[Path],
 ):
     """Main workflow."""
     console.print(f"\n[bold]anime-mux v{__version__}[/bold]")
     console.print("=" * 50)
+
+    # Initialize logger
+    init_logger(log_file, verbose)
+    logger = get_logger()
+    if logger:
+        logger.info(f"Processing directory: {directory}")
 
     # Build video encoding config
     codec_map = {
@@ -207,6 +235,12 @@ def _run(
     # Determine output directory
     output_dir = output or (directory / "output")
 
+    # Validate output directory is writable
+    is_valid, error = validate_output_directory(output_dir)
+    if not is_valid:
+        console.print(f"[red]Error: {error}[/red]")
+        sys.exit(1)
+
     # Phase 1: Analyze
     analysis = analyze_series(directory, audio_dir, subs_dir)
     if not analysis:
@@ -231,6 +265,37 @@ def _run(
     if not plan.jobs:
         console.print("[yellow]No files to process after selections.[/yellow]")
         sys.exit(0)
+
+    # Check disk space
+    is_sufficient, available, required = check_disk_space(plan)
+
+    console.print(f"\n[dim]Estimated output size: {format_bytes(required)}[/dim]")
+    console.print(f"[dim]Available disk space: {format_bytes(available)}[/dim]")
+
+    if not is_sufficient:
+        console.print(
+            f"[red]Error: Insufficient disk space. "
+            f"Need {format_bytes(required)}, have {format_bytes(available)}[/red]"
+        )
+        sys.exit(1)
+
+    # Warning threshold
+    if available - required < DISK_SPACE_WARNING_THRESHOLD:
+        remaining = available - required
+        console.print(
+            f"[yellow]Warning: Only {format_bytes(remaining)} "
+            f"will remain after processing.[/yellow]"
+        )
+        choice = inquirer.select(
+            message="Continue anyway?",
+            choices=[
+                {"name": f"Yes, continue ({format_bytes(remaining)} remaining)", "value": "y"},
+                {"name": "No, abort", "value": "n"},
+            ],
+            default="n",
+        ).execute()
+        if choice == "n":
+            sys.exit(0)
 
     # Phase 4: Display plan and confirm
     display_merge_plan(plan)

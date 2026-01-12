@@ -3,9 +3,11 @@
 import re
 from pathlib import Path
 
+from .constants import SPECIAL_EPISODE_PREFIXES
+
 # Patterns for special episode markers (OVA, SP, etc.) with optional number suffix
 # The number is optional - missing number implies episode 1
-SPECIAL_EPISODE_PREFIXES = ["OVA", "OAD", "SP", "Special", "Extra", "Bonus", "Movie"]
+# Imported from constants: SPECIAL_EPISODE_PREFIXES
 
 
 def _try_prefixed_pattern(files: list[Path]) -> dict[int, Path]:

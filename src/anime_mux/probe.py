@@ -2,15 +2,23 @@
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
+from .constants import (
+    FFPROBE_OUTPUT_FORMAT,
+    FFPROBE_VERBOSE_LEVEL,
+)
 from .models import Track, TrackSource, TrackType
-from .utils import console
 
 
 class ProbeError(Exception):
     """Error during media probing."""
+
+    pass
+
+
+class FFprobeNotFoundError(ProbeError):
+    """FFprobe executable not found in PATH."""
 
     pass
 
@@ -52,15 +60,16 @@ def probe_file(file_path: Path) -> dict:
     Run ffprobe and return parsed JSON.
 
     Raises:
+        FFprobeNotFoundError: If ffprobe executable is not found
         ProbeError: If ffprobe fails or returns invalid output
     """
     try:
         cmd = [
             "ffprobe",
             "-v",
-            "quiet",
+            FFPROBE_VERBOSE_LEVEL,
             "-print_format",
-            "json",
+            FFPROBE_OUTPUT_FORMAT,
             "-show_streams",
             "-show_format",
             str(file_path),
@@ -68,8 +77,7 @@ def probe_file(file_path: Path) -> dict:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return json.loads(result.stdout)
     except FileNotFoundError:
-        console.print("[red]Error: ffprobe not found. Please install ffmpeg.[/red]")
-        sys.exit(1)
+        raise FFprobeNotFoundError("ffprobe not found. Please install ffmpeg.")
     except subprocess.CalledProcessError as e:
         raise ProbeError(f"ffprobe failed for {file_path.name}: {e}")
     except json.JSONDecodeError as e:

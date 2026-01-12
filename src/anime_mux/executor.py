@@ -4,6 +4,7 @@ import os
 import re
 import shlex
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -17,6 +18,19 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
+from .constants import (
+    AUDIO_BITRATE_256K,
+    BF_FRAMES_ZERO,
+    DISPOSITION_DEFAULT,
+    DISPOSITION_NONE,
+    ENCODING_PRESET_MEDIUM,
+    MAX_INTERLEAVE_DELTA_ZERO,
+    MAX_RUNTIME_MULTIPLIER,
+    MIN_PROGRESS_TIMEOUT,
+    PIXEL_FORMAT_YUV420P,
+    PROGRESS_TIMEOUT_SECONDS,
+    VAAPI_DEVICE_PATH,
+)
 from .models import MergeJob, MergePlan, VideoCodec
 from .probe import get_duration
 from .utils import console
@@ -43,7 +57,7 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
     if is_vaapi:
         # Enable hardware decoding - keeps frames on GPU, avoiding CPU-GPU transfers
         cmd.extend(["-hwaccel", "vaapi"])
-        cmd.extend(["-hwaccel_device", "/dev/dri/renderD128"])
+        cmd.extend(["-hwaccel_device", VAAPI_DEVICE_PATH])
         cmd.extend(["-hwaccel_output_format", "vaapi"])
 
     # Collect all input files
@@ -88,7 +102,7 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
         # Fix audio/video interleaving when attachments are mapped from a different
         # input than audio. Without this, ffmpeg may write all audio packets first,
         # causing players to appear to have no audio during video playback.
-        cmd.extend(["-max_interleave_delta", "0"])
+        cmd.extend(["-max_interleave_delta", MAX_INTERLEAVE_DELTA_ZERO])
 
     # Video codec handling
     if job.video_encoding.codec == VideoCodec.COPY:
@@ -110,9 +124,9 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
             crf = job.video_encoding.crf if job.video_encoding.crf else 20
 
         cmd.extend(["-crf", str(crf)])
-        cmd.extend(["-preset", "medium"])
+        cmd.extend(["-preset", ENCODING_PRESET_MEDIUM])
         # Ensure output is compatible with most players
-        cmd.extend(["-pix_fmt", "yuv420p"])
+        cmd.extend(["-pix_fmt", PIXEL_FORMAT_YUV420P])
     elif job.video_encoding.codec == VideoCodec.H264_VAAPI:
         # VA-API hardware encoding
         # With -hwaccel_output_format vaapi, frames are already on GPU
@@ -135,7 +149,7 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
 
         cmd.extend(["-global_quality", str(quality)])
         # Disable B-frames for better AMD compatibility
-        cmd.extend(["-bf", "0"])
+        cmd.extend(["-bf", BF_FRAMES_ZERO])
     elif job.video_encoding.codec == VideoCodec.HEVC:
         cmd.extend(["-c:v", "libx265"])
 
@@ -153,9 +167,9 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
             crf = job.video_encoding.crf if job.video_encoding.crf else 25
 
         cmd.extend(["-crf", str(crf)])
-        cmd.extend(["-preset", "medium"])
+        cmd.extend(["-preset", ENCODING_PRESET_MEDIUM])
         # Ensure output is compatible with most players
-        cmd.extend(["-pix_fmt", "yuv420p"])
+        cmd.extend(["-pix_fmt", PIXEL_FORMAT_YUV420P])
     elif job.video_encoding.codec == VideoCodec.HEVC_VAAPI:
         # VA-API hardware encoding
         # With -hwaccel_output_format vaapi, frames are already on GPU
@@ -180,21 +194,21 @@ def build_ffmpeg_command(job: MergeJob, transcode_audio: bool = False) -> list[s
 
     # Audio: copy or re-encode to AAC
     if transcode_audio:
-        cmd.extend(["-c:a", "aac", "-b:a", "256k"])
+        cmd.extend(["-c:a", "aac", "-b:a", AUDIO_BITRATE_256K])
     else:
         cmd.extend(["-c:a", "copy"])
     cmd.extend(["-c:s", "copy"])
 
     # Set dispositions (first audio and first subtitle are default)
     if job.audio_tracks:
-        cmd.extend(["-disposition:a:0", "default"])
+        cmd.extend(["-disposition:a:0", DISPOSITION_DEFAULT])
         for i in range(1, len(job.audio_tracks)):
-            cmd.extend([f"-disposition:a:{i}", "0"])
+            cmd.extend([f"-disposition:a:{i}", DISPOSITION_NONE])
 
     if job.subtitle_tracks:
-        cmd.extend(["-disposition:s:0", "default"])
+        cmd.extend(["-disposition:s:0", DISPOSITION_DEFAULT])
         for i in range(1, len(job.subtitle_tracks)):
-            cmd.extend([f"-disposition:s:{i}", "0"])
+            cmd.extend([f"-disposition:s:{i}", DISPOSITION_NONE])
 
     # Output file
     cmd.append(str(job.output_path))
@@ -240,7 +254,7 @@ def run_ffmpeg_with_progress(
     task_id: TaskID,
 ) -> tuple[bool, str | None]:
     """
-    Run FFmpeg command with real-time progress updates.
+    Run FFmpeg command with real-time progress updates and hang detection.
 
     Args:
         cmd: FFmpeg command to run
@@ -255,6 +269,16 @@ def run_ffmpeg_with_progress(
     # Insert before output file (last argument)
     cmd_with_progress = cmd[:-1] + ["-progress", "pipe:1", "-nostats", cmd[-1]]
 
+    # Calculate timeout thresholds
+    # Progress timeout: time without progress updates before considering it hung
+    # Use a percentage of video duration, with min/max bounds
+    progress_timeout = max(
+        MIN_PROGRESS_TIMEOUT,
+        min(PROGRESS_TIMEOUT_SECONDS, duration_seconds * 0.5)
+    )
+    # Maximum runtime: absolute limit based on video duration
+    max_runtime = duration_seconds * MAX_RUNTIME_MULTIPLIER
+
     try:
         process = subprocess.Popen(
             cmd_with_progress,
@@ -267,11 +291,42 @@ def run_ffmpeg_with_progress(
         # Parse progress output
         out_time_pattern = re.compile(r"out_time_us=(\d+)")
         error_output = []
+        last_progress_time = time.time()
+        start_time = time.time()
 
         stdout = process.stdout
         assert stdout is not None, "stdout should be available with PIPE"
 
         while True:
+            # Check for timeout conditions
+            current_time = time.time()
+            elapsed_since_progress = current_time - last_progress_time
+            total_elapsed = current_time - start_time
+
+            # Check if encoding has hung (no progress for too long)
+            if elapsed_since_progress > progress_timeout:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                return False, (
+                    f"Encoding hung - no progress for {elapsed_since_progress:.0f} seconds. "
+                    f"The process may be stuck waiting for input or output."
+                )
+
+            # Check if encoding exceeded maximum allowed time
+            if total_elapsed > max_runtime:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                return False, (
+                    f"Encoding exceeded maximum time of {max_runtime/3600:.1f} hours. "
+                    f"This may indicate a problem with the source file or encoder."
+                )
+
             line = stdout.readline()
             if not line and process.poll() is not None:
                 break
@@ -284,6 +339,8 @@ def run_ffmpeg_with_progress(
                 # Update progress (percentage)
                 percent = min(100, (out_time_seconds / duration_seconds) * 100)
                 progress.update(task_id, completed=percent)
+                # Reset hang timer on successful progress update
+                last_progress_time = time.time()
 
         # Capture any remaining stderr
         _, stderr = process.communicate()
