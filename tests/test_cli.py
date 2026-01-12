@@ -1,7 +1,6 @@
 """Tests for CLI module."""
 
 import pytest
-from pathlib import Path
 from typer.testing import CliRunner
 
 from anime_mux.cli import app

@@ -4,7 +4,6 @@ import os
 import shutil
 from pathlib import Path
 
-from .constants import DISK_SPACE_WARNING_THRESHOLD
 from .models import MergePlan, VideoCodec
 
 
