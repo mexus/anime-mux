@@ -57,7 +57,7 @@ def check_disk_space(plan: MergePlan) -> tuple[bool, int, int]:
     return available >= required, available, required
 
 
-def format_bytes(bytes_value: int) -> str:
+def format_bytes(bytes_value: float) -> str:
     """Format bytes as human-readable string."""
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if bytes_value < 1024:
