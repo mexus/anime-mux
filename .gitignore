@@ -25,9 +25,6 @@ wheels/
 venv/
 ENV/
 
-# uv
-.python-version
-
 # Testing
 .pytest_cache/
 .coverage

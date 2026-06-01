@@ -106,13 +106,6 @@ class TestCLIValidation:
 class TestCLIMisc:
     """Test CLI miscellaneous functionality."""
 
-    def test_log_file_option(self, tmp_path):
-        """Test that --log-file option is recognized."""
-        log_file = tmp_path / "test.log"
-        result = runner.invoke(app, [str(tmp_path), "--log-file", str(log_file)])
-        # Will fail at ffprobe, but option should be parsed
-        assert "log-file" not in result.stdout  # No error about unknown option
-
     def test_verbose_option(self, tmp_path):
         """Test that -V option is recognized."""
         result = runner.invoke(app, [str(tmp_path), "--verbose"])

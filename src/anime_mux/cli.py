@@ -16,7 +16,6 @@ from .constants import (
     VALID_VIDEO_CODECS,
 )
 from .executor import check_existing_outputs, execute_plan
-from .logging_config import get_logger, init_logger
 from .models import VideoCodec, VideoEncodingConfig
 from .planner import build_merge_plan, display_merge_plan
 from .probe import FFprobeNotFoundError, check_ffprobe
@@ -97,12 +96,6 @@ def main(
         "-V",
         help="Print ffmpeg commands before executing",
     ),
-    log_file: Optional[Path] = typer.Option(
-        None,
-        "--log-file",
-        "-l",
-        help="Write debug logs to file",
-    ),
     version: bool = typer.Option(
         None,
         "--version",
@@ -170,7 +163,6 @@ def main(
             crf,
             quality,
             verbose,
-            log_file,
         )
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user.[/yellow]")
@@ -193,17 +185,10 @@ def _run(
     crf: Optional[int],
     quality: Optional[int],
     verbose: bool,
-    log_file: Optional[Path],
 ):
     """Main workflow."""
     console.print(f"\n[bold]anime-mux v{__version__}[/bold]")
     console.print("=" * 50)
-
-    # Initialize logger
-    init_logger(log_file, verbose)
-    logger = get_logger()
-    if logger:
-        logger.info(f"Processing directory: {directory}")
 
     # Build video encoding config
     codec_map = {

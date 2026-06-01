@@ -2,9 +2,7 @@
 
 from pathlib import Path
 
-from .matcher import extract_episode_numbers
-from .models import ExternalSource, TrackType
-from .utils import (
+from .constants import (
     AUDIO_DIR_KEYWORDS,
     AUDIO_EXTENSIONS,
     AUDIO_SEARCH_DIRS,
@@ -12,8 +10,10 @@ from .utils import (
     SUBTITLE_EXTENSIONS,
     SUBTITLE_SEARCH_DIRS,
     VIDEO_EXTENSIONS,
-    console,
 )
+from .matcher import extract_episode_numbers
+from .models import ExternalSource, TrackType
+from .utils import console
 
 
 def find_video_files(directory: Path) -> list[Path]:
