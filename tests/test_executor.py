@@ -888,3 +888,93 @@ class TestHevcEncoding:
         assert cmd[idx_cv + 1] == "libx265"
         idx_crf = cmd.index("-crf")
         assert cmd[idx_crf + 1] == "25"  # base 20 + 5 for HEVC
+
+
+class TestEncodingWithoutVideoTracks:
+    """Fallback quality/CRF when encoding is requested but no video track exists.
+
+    Without a video track there is no resolution/bitrate metadata to drive the
+    auto-calculation, so build_ffmpeg_command falls back to the explicit config
+    value or a per-codec hardcoded default.
+    """
+
+    def _make_job(self, encoding: VideoEncodingConfig) -> MergeJob:
+        video_file = Path("/media/episode01.mkv")
+        episode = Episode(number=1, video_file=video_file)
+        return MergeJob(
+            episode=episode,
+            output_path=Path("/output/episode01.mkv"),
+            video_tracks=[],
+            audio_tracks=[make_audio_track(video_file, index=1)],
+            subtitle_tracks=[],
+            preserve_attachments=False,
+            video_encoding=encoding,
+        )
+
+    def test_h264_no_video_track_uses_default_crf(self):
+        """H.264 with no video track falls back to CRF 20."""
+        cmd = build_ffmpeg_command(
+            self._make_job(VideoEncodingConfig(codec=VideoCodec.H264))
+        )
+
+        assert cmd[cmd.index("-c:v") + 1] == "libx264"
+        assert cmd[cmd.index("-crf") + 1] == "20"
+
+    def test_h264_no_video_track_uses_explicit_crf(self):
+        """H.264 with no video track honors an explicit CRF."""
+        cmd = build_ffmpeg_command(
+            self._make_job(VideoEncodingConfig(codec=VideoCodec.H264, crf=30))
+        )
+
+        assert cmd[cmd.index("-crf") + 1] == "30"
+
+    def test_hevc_no_video_track_uses_default_crf(self):
+        """HEVC with no video track falls back to CRF 25."""
+        cmd = build_ffmpeg_command(
+            self._make_job(VideoEncodingConfig(codec=VideoCodec.HEVC))
+        )
+
+        assert cmd[cmd.index("-c:v") + 1] == "libx265"
+        assert cmd[cmd.index("-crf") + 1] == "25"
+
+    def test_hevc_no_video_track_uses_explicit_crf(self):
+        """HEVC with no video track honors an explicit CRF."""
+        cmd = build_ffmpeg_command(
+            self._make_job(VideoEncodingConfig(codec=VideoCodec.HEVC, crf=28))
+        )
+
+        assert cmd[cmd.index("-crf") + 1] == "28"
+
+    def test_h264_vaapi_no_video_track_uses_default_quality(self):
+        """H.264 VA-API with no video track falls back to quality 22."""
+        cmd = build_ffmpeg_command(
+            self._make_job(VideoEncodingConfig(codec=VideoCodec.H264_VAAPI))
+        )
+
+        assert cmd[cmd.index("-c:v") + 1] == "h264_vaapi"
+        assert cmd[cmd.index("-global_quality") + 1] == "22"
+
+    def test_h264_vaapi_no_video_track_uses_explicit_quality(self):
+        """H.264 VA-API with no video track honors an explicit quality."""
+        cmd = build_ffmpeg_command(
+            self._make_job(VideoEncodingConfig(codec=VideoCodec.H264_VAAPI, quality=19))
+        )
+
+        assert cmd[cmd.index("-global_quality") + 1] == "19"
+
+    def test_hevc_vaapi_no_video_track_uses_default_quality(self):
+        """HEVC VA-API with no video track falls back to quality 27."""
+        cmd = build_ffmpeg_command(
+            self._make_job(VideoEncodingConfig(codec=VideoCodec.HEVC_VAAPI))
+        )
+
+        assert cmd[cmd.index("-c:v") + 1] == "hevc_vaapi"
+        assert cmd[cmd.index("-global_quality") + 1] == "27"
+
+    def test_hevc_vaapi_no_video_track_uses_explicit_quality(self):
+        """HEVC VA-API with no video track honors an explicit quality."""
+        cmd = build_ffmpeg_command(
+            self._make_job(VideoEncodingConfig(codec=VideoCodec.HEVC_VAAPI, quality=24))
+        )
+
+        assert cmd[cmd.index("-global_quality") + 1] == "24"
