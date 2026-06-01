@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
 from .discovery import (
     discover_audio_sources,
@@ -11,7 +11,7 @@ from .discovery import (
 )
 from .matcher import extract_episode_numbers
 from .models import AnalysisResult, Episode, Track, TrackType
-from .probe import parse_tracks, probe_external_file, probe_file, ProbeError
+from .probe import ProbeError, parse_tracks, probe_external_file, probe_file
 from .utils import console
 
 

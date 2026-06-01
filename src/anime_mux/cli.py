@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from InquirerPy import inquirer
@@ -34,7 +33,7 @@ app = typer.Typer(
 )
 
 
-def version_callback(value: bool):
+def version_callback(value: bool) -> None:
     if value:
         console.print(f"anime-mux version {__version__}")
         raise typer.Exit()
@@ -50,19 +49,19 @@ def main(
         dir_okay=True,
         resolve_path=True,
     ),
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(
         None,
         "--output",
         "-o",
         help="Output directory (default: <directory>/output)",
     ),
-    audio_dir: Optional[Path] = typer.Option(
+    audio_dir: Path | None = typer.Option(
         None,
         "--audio-dir",
         "-a",
         help="Directory to search for external audio files",
     ),
-    subs_dir: Optional[Path] = typer.Option(
+    subs_dir: Path | None = typer.Option(
         None,
         "--subs-dir",
         "-s",
@@ -80,12 +79,12 @@ def main(
         "-c",
         help="Video codec: 'copy', 'h264', 'h264-vaapi', 'hevc', or 'hevc-vaapi'",
     ),
-    crf: Optional[int] = typer.Option(
+    crf: int | None = typer.Option(
         None,
         "--crf",
         help="CRF value for h264/hevc CPU encoding (0-51, lower=better). Auto-calculated if not set.",
     ),
-    quality: Optional[int] = typer.Option(
+    quality: int | None = typer.Option(
         None,
         "--quality",
         help="Quality value for VA-API GPU encoding (0-51, lower=better). Auto-calculated if not set.",
@@ -104,7 +103,7 @@ def main(
         is_eager=True,
         help="Show version and exit",
     ),
-):
+) -> None:
     """
     Analyze video files and interactively select tracks to keep.
 
@@ -177,15 +176,15 @@ def main(
 
 def _run(
     directory: Path,
-    output: Optional[Path],
-    audio_dir: Optional[Path],
-    subs_dir: Optional[Path],
+    output: Path | None,
+    audio_dir: Path | None,
+    subs_dir: Path | None,
     transcode_audio: bool,
     video_codec: str,
-    crf: Optional[int],
-    quality: Optional[int],
+    crf: int | None,
+    quality: int | None,
     verbose: bool,
-):
+) -> None:
     """Main workflow."""
     console.print(f"\n[bold]anime-mux v{__version__}[/bold]")
     console.print("=" * 50)

@@ -1,6 +1,7 @@
 """Tests for probe module."""
 
 from pathlib import Path
+from typing import Any
 
 from anime_mux.models import TrackSource, TrackType
 from anime_mux.probe import _get_tag, parse_tracks
@@ -193,12 +194,12 @@ class TestParseTracks:
         assert tracks[0].track_type == TrackType.VIDEO
 
     def test_empty_streams(self):
-        probe_data = {"streams": []}
+        probe_data: dict[str, Any] = {"streams": []}
         tracks = parse_tracks(probe_data, Path("/test/video.mkv"))
         assert tracks == []
 
     def test_no_streams_key(self):
-        probe_data = {}
+        probe_data: dict[str, Any] = {}
         tracks = parse_tracks(probe_data, Path("/test/video.mkv"))
         assert tracks == []
 

@@ -3,18 +3,17 @@
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional
 
 from .constants import (
-    BASE_CRF_1080P,
     BASE_CRF_4K,
     BASE_CRF_480P,
     BASE_CRF_720P,
+    BASE_CRF_1080P,
     BASE_CRF_LOWER,
-    BASE_QUALITY_1080P,
     BASE_QUALITY_4K,
     BASE_QUALITY_480P,
     BASE_QUALITY_720P,
+    BASE_QUALITY_1080P,
     BASE_QUALITY_LOWER,
     HEVC_CODEC_OFFSET,
     HIGH_BITRATE_THRESHOLD,
@@ -22,10 +21,10 @@ from .constants import (
     MAX_QUALITY_VALUE,
     MEDIUM_BITRATE_THRESHOLD,
     MIN_QUALITY_VALUE,
-    TYPICAL_BITRATE_1080P,
     TYPICAL_BITRATE_4K,
     TYPICAL_BITRATE_480P,
     TYPICAL_BITRATE_720P,
+    TYPICAL_BITRATE_1080P,
     TYPICAL_BITRATE_LOWER,
 )
 
@@ -61,16 +60,14 @@ class VideoEncodingConfig:
     """Configuration for video encoding."""
 
     codec: VideoCodec = VideoCodec.COPY
-    crf: Optional[int] = None  # If None, auto-calculate based on source (for libx264)
-    quality: Optional[int] = (
-        None  # If None, auto-calculate based on source (for VA-API)
-    )
+    crf: int | None = None  # If None, auto-calculate based on source (for libx264)
+    quality: int | None = None  # If None, auto-calculate based on source (for VA-API)
 
     def calculate_crf(
         self,
-        width: Optional[int],
-        height: Optional[int],
-        bitrate: Optional[int],
+        width: int | None,
+        height: int | None,
+        bitrate: int | None,
         codec: "VideoCodec",
     ) -> int:
         """
@@ -135,9 +132,9 @@ class VideoEncodingConfig:
 
     def calculate_quality(
         self,
-        width: Optional[int],
-        height: Optional[int],
-        bitrate: Optional[int],
+        width: int | None,
+        height: int | None,
+        bitrate: int | None,
         codec: "VideoCodec",
     ) -> int:
         """
@@ -203,16 +200,16 @@ class Track:
     track_type: TrackType
     codec: str
     language: str
-    title: Optional[str]
+    title: str | None
     source: TrackSource
     source_file: Path
-    channels: Optional[int] = None
+    channels: int | None = None
     is_forced: bool = False
     is_default: bool = False
     # Video metadata (only populated for VIDEO tracks)
-    width: Optional[int] = None
-    height: Optional[int] = None
-    bitrate: Optional[int] = None  # bits per second
+    width: int | None = None
+    height: int | None = None
+    bitrate: int | None = None  # bits per second
 
     @property
     def display_name(self) -> str:

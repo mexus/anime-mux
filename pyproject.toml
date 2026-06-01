@@ -26,3 +26,39 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.14.9",
 ]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes defaults
+# I: import sorting, UP: pyupgrade (e.g. Optional[X] -> X | None), B: bugbear
+select = ["E", "F", "I", "UP", "B"]
+# E501: the formatter owns code line length; remaining long lines are
+# unsplittable user-facing strings (CLI help text, console messages).
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# typer's API relies on calling Option/Argument in parameter defaults.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[[tool.mypy.overrides]]
+# InquirerPy's inquirer module exposes prompts without explicit re-export.
+module = "InquirerPy.*"
+implicit_reexport = true
+
+[[tool.mypy.overrides]]
+# Test functions don't need return/param annotations.
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["anime_mux"]

@@ -3,6 +3,7 @@
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from .constants import (
     FFPROBE_OUTPUT_FORMAT,
@@ -55,7 +56,7 @@ def get_duration(file_path: Path) -> float | None:
         return None
 
 
-def probe_file(file_path: Path) -> dict:
+def probe_file(file_path: Path) -> dict[str, Any]:
     """
     Run ffprobe and return parsed JSON.
 
@@ -75,28 +76,26 @@ def probe_file(file_path: Path) -> dict:
             str(file_path),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return json.loads(result.stdout)
-    except FileNotFoundError:
-        raise FFprobeNotFoundError("ffprobe not found. Please install ffmpeg.")
+        data: dict[str, Any] = json.loads(result.stdout)
+        return data
+    except FileNotFoundError as e:
+        raise FFprobeNotFoundError("ffprobe not found. Please install ffmpeg.") from e
     except subprocess.CalledProcessError as e:
-        raise ProbeError(f"ffprobe failed for {file_path.name}: {e}")
+        raise ProbeError(f"ffprobe failed for {file_path.name}: {e}") from e
     except json.JSONDecodeError as e:
-        raise ProbeError(f"Invalid ffprobe output for {file_path.name}: {e}")
+        raise ProbeError(f"Invalid ffprobe output for {file_path.name}: {e}") from e
 
 
-def _get_tag(tags: dict, *keys: str) -> str | None:
+def _get_tag(tags: dict[str, Any], *keys: str) -> str | None:
     """Get a tag value, trying multiple key variations."""
     for k in keys:
-        if k in tags:
-            return tags[k]
-        if k.upper() in tags:
-            return tags[k.upper()]
-        if k.lower() in tags:
-            return tags[k.lower()]
+        for variant in (k, k.upper(), k.lower()):
+            if variant in tags:
+                return str(tags[variant])
     return None
 
 
-def parse_tracks(probe_data: dict, source_file: Path) -> list[Track]:
+def parse_tracks(probe_data: dict[str, Any], source_file: Path) -> list[Track]:
     """Convert ffprobe output to Track objects."""
     tracks = []
 

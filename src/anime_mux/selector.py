@@ -40,7 +40,9 @@ class SelectionResult:
     skipped_episodes: list[int]
 
 
-def display_analysis(analysis: AnalysisResult):
+def display_analysis(
+    analysis: AnalysisResult,
+) -> tuple[list[tuple[str, bool, str]], list[tuple[str, bool, str]]]:
     """Display the analysis results in a formatted table."""
     console.print("\n" + "=" * 70)
     console.print("[bold]TRACK ANALYSIS[/bold]", justify="center")
@@ -115,7 +117,7 @@ def _build_checkbox_choices(
 ) -> list[Choice]:
     """Build InquirerPy Choice objects from options."""
     choices = []
-    for i, (identifier, is_embedded, display_name) in enumerate(options):
+    for i, (_identifier, is_embedded, display_name) in enumerate(options):
         source_tag = "[embedded]" if is_embedded else "[external]"
         name = f"{source_tag} {display_name}"
         choices.append(Choice(value=i, name=name, enabled=False))
