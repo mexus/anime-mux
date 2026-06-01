@@ -48,6 +48,25 @@ class TestExtractEpisodeNumbers:
         result = extract_episode_numbers(files)
         assert result == {5: files[0], 6: files[1], 7: files[2]}
 
+    def test_season_episode_format_with_titles(self):
+        """SxxEyy format with variable episode titles between marker and tail."""
+        files = [
+            Path(
+                "/media/Hells.Paradise.S02E01.Dawn.and.Confusion."
+                "1080p.CR.WEB-DL.JPN.AAC2.0.H.264.ToonsHub.mkv"
+            ),
+            Path(
+                "/media/Hells.Paradise.S02E02.Reality.and.Fantasy."
+                "1080p.CR.WEB-DL.JPN.AAC2.0.H.264.ToonsHub.mkv"
+            ),
+            Path(
+                "/media/Hells.Paradise.S02E03.Immutability.and.Change."
+                "1080p.CR.WEB-DL.JPN.AAC2.0.H.264.ToonsHub.mkv"
+            ),
+        ]
+        result = extract_episode_numbers(files)
+        assert result == {1: files[0], 2: files[1], 3: files[2]}
+
     def test_simple_numbered(self):
         """Simple numbered files."""
         files = [

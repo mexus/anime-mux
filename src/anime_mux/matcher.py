@@ -63,6 +63,38 @@ def _try_prefixed_pattern(files: list[Path]) -> dict[int, Path]:
     return {}
 
 
+def _try_season_episode_pattern(files: list[Path]) -> dict[int, Path]:
+    """
+    Try to match the SxxEyy season/episode convention (e.g. S02E01).
+
+    This handles releases where a variable episode title sits between the
+    episode marker and the rest of the filename (e.g.
+    ``Show.S02E01.Some.Title.1080p.mkv``), which defeats the generic
+    fixed-prefix/suffix detection because nothing is constant on both sides.
+
+    Each file must contain exactly one SxxEyy marker; the episode number is
+    taken from the ``E`` part. Returns an empty dict if the convention does
+    not apply unambiguously to every file.
+    """
+    pattern = re.compile(r"(?<![a-zA-Z])S\d+E(\d+)(?!\d)", re.IGNORECASE)
+
+    episode_map: dict[int, Path] = {}
+    for file_path in files:
+        matches = pattern.findall(file_path.name)
+        # Require exactly one marker to avoid ambiguity.
+        if len(matches) != 1:
+            return {}
+        episode_num = int(matches[0])
+        if episode_num in episode_map:
+            return {}
+        episode_map[episode_num] = file_path
+
+    if len(episode_map) == len(files):
+        return episode_map
+
+    return {}
+
+
 def extract_episode_numbers(files: list[Path]) -> dict[int, Path]:
     """
     Intelligently extracts episode numbers from a list of filenames
@@ -78,6 +110,12 @@ def extract_episode_numbers(files: list[Path]) -> dict[int, Path]:
     # Single file: assume episode 1 (movie case)
     if len(files) == 1:
         return {1: files[0]}
+
+    # Try the SxxEyy convention first: it's an unambiguous, explicit marker
+    # and is robust to variable episode titles within the filename.
+    season_episode_result = _try_season_episode_pattern(files)
+    if season_episode_result:
+        return season_episode_result
 
     # Use the first filename as a template to generate potential patterns.
     template_name = files[0].name
