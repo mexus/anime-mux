@@ -441,6 +441,35 @@ class TestBuildMergePlan:
         assert len(plan.jobs) == 3
         assert [j.episode.number for j in plan.jobs] == [1, 2, 3]
 
+    def test_simple_names(self):
+        episodes = {}
+        for i in (1, 2, 10):
+            video_file = Path(f"/media/[Group] Show - {i:02d} [1080p].mkv")
+            audio = make_audio_track(video_file, language="jpn", title="Japanese")
+            episodes[i] = make_episode(i, video_file, audio_tracks=[audio])
+
+        first_audio = list(episodes.values())[0].embedded_tracks[1]
+        analysis = make_analysis(episodes, common_audio=[first_audio.identity_key])
+        selection = make_selection(
+            audio_selections=[
+                TrackSelection(
+                    identifier=first_audio.identity_key,
+                    is_embedded=True,
+                    display_name="Japanese",
+                )
+            ]
+        )
+        output_dir = Path("/output")
+
+        plan = build_merge_plan(analysis, selection, output_dir, simple_names=True)
+
+        # Episode number is zero-padded to two digits; original extension kept.
+        assert [j.output_path.name for j in plan.jobs] == [
+            "E01.mkv",
+            "E02.mkv",
+            "E10.mkv",
+        ]
+
     def test_skipped_episodes(self):
         episodes = {}
         for i in range(1, 4):

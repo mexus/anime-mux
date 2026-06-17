@@ -86,6 +86,7 @@ def build_merge_plan(
     selection_result: SelectionResult,
     output_dir: Path,
     video_encoding: VideoEncodingConfig | None = None,
+    simple_names: bool = False,
 ) -> MergePlan:
     """
     Build a merge plan from analysis and user selections.
@@ -95,6 +96,8 @@ def build_merge_plan(
         selection_result: User's track selections
         output_dir: Directory for output files
         video_encoding: Optional video encoding configuration
+        simple_names: Name outputs as E01.mkv, E02.mkv, ... instead of
+            preserving the original filename
 
     Returns:
         MergePlan ready for execution
@@ -120,8 +123,14 @@ def build_merge_plan(
         audio_tracks = _resolve_audio_tracks(episode, selection_result, analysis)
         subtitle_tracks = _resolve_subtitle_tracks(episode, selection_result, analysis)
 
-        # Build output path (preserve original filename)
-        output_path = output_dir / episode.video_file.name
+        # Build output path. Either preserve the original filename or use a
+        # simple E01, E02, ... name. The original extension is kept in both
+        # cases.
+        if simple_names:
+            output_name = f"E{ep_num:02d}{episode.video_file.suffix}"
+        else:
+            output_name = episode.video_file.name
+        output_path = output_dir / output_name
 
         job = MergeJob(
             episode=episode,

@@ -95,6 +95,11 @@ def main(
         "-V",
         help="Print ffmpeg commands before executing",
     ),
+    simple_names: bool = typer.Option(
+        False,
+        "--simple-names",
+        help="Name outputs as E01, E02, ... (original extension kept)",
+    ),
     version: bool = typer.Option(
         None,
         "--version",
@@ -162,6 +167,7 @@ def main(
             crf,
             quality,
             verbose,
+            simple_names,
         )
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user.[/yellow]")
@@ -184,6 +190,7 @@ def _run(
     crf: int | None,
     quality: int | None,
     verbose: bool,
+    simple_names: bool,
 ) -> None:
     """Main workflow."""
     console.print(f"\n[bold]anime-mux v{__version__}[/bold]")
@@ -248,7 +255,9 @@ def _run(
     selection_result = select_tracks(analysis, audio_options, sub_options)
 
     # Phase 3: Build plan
-    plan = build_merge_plan(analysis, selection_result, output_dir, video_encoding)
+    plan = build_merge_plan(
+        analysis, selection_result, output_dir, video_encoding, simple_names
+    )
 
     if not plan.jobs:
         console.print("[yellow]No files to process after selections.[/yellow]")
