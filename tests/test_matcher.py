@@ -187,6 +187,45 @@ class TestExtractEpisodeNumbers:
         result = extract_episode_numbers(files)
         assert result == {1: files[0], 2: files[1], 3: files[2]}
 
+    def test_per_file_crc32_hash_suffix(self):
+        """Trailing per-file CRC32 hash must not defeat detection.
+
+        SubsPlease-style releases append a unique ``[CRC32]`` tag after the
+        episode, so nothing past the episode is constant across files.
+        """
+        files = [
+            Path("/media/[SubsPlease] Show - 01 (1080p) [8819B368].mkv"),
+            Path("/media/[SubsPlease] Show - 02 (1080p) [DF6CA137].mkv"),
+            Path("/media/[SubsPlease] Show - 03 (1080p) [F9B903AD].mkv"),
+        ]
+        result = extract_episode_numbers(files)
+        assert result == {1: files[0], 2: files[1], 3: files[2]}
+
+    def test_release_dir_with_punctuated_title(self):
+        """Real SubsPlease release inside a punctuated-title directory.
+
+        ``Kage no Jitsuryokusha ni Naritakute!`` has a ``!`` and spaces in the
+        title but no digits, so the leftmost numeric run is the episode itself;
+        the trailing ``(1080p)`` tag and per-file CRC32 hash vary freely.
+        """
+        base = "/media/deluge/Kage no Jitsuryokusha ni Naritakute!"
+        files = [
+            Path(
+                f"{base}/[SubsPlease] Kage no Jitsuryokusha ni Naritakute! "
+                "- 01 (1080p) [8819B368].mkv"
+            ),
+            Path(
+                f"{base}/[SubsPlease] Kage no Jitsuryokusha ni Naritakute! "
+                "- 02 (1080p) [DF6CA137].mkv"
+            ),
+            Path(
+                f"{base}/[SubsPlease] Kage no Jitsuryokusha ni Naritakute! "
+                "- 03 (1080p) [F9B903AD].mkv"
+            ),
+        ]
+        result = extract_episode_numbers(files)
+        assert result == {1: files[0], 2: files[1], 3: files[2]}
+
     def test_ova_pattern_all_numbered(self):
         """OVA pattern where all episodes have numbers."""
         files = [
